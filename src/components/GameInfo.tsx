@@ -1,4 +1,4 @@
-import { PlayerColor } from '../types';
+import { PlayerColor, GameMode } from '../types';
 
 interface GameInfoProps {
   currentPlayer: PlayerColor;
@@ -11,9 +11,19 @@ interface GameInfoProps {
     red: number;
     black: number;
   };
+  gameMode?: GameMode;
 }
 
-const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer }: GameInfoProps) => {
+const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode = 'pvp' }: GameInfoProps) => {
+  const getGameModeLabel = () => {
+    switch (gameMode) {
+      case 'pvp': return '👥 PvP';
+      case 'ai-easy': return '🤖 vs AI (Easy)';
+      case 'ai-medium': return '🎯 vs AI (Medium)';
+      case 'ai-hard': return '🔥 vs AI (Hard)';
+      default: return '👥 PvP';
+    }
+  };
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -24,9 +34,12 @@ const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer }: GameInfo
     <div className="w-full space-y-4">
       {/* Header */}
       <div className="bg-background-light/80 dark:bg-background-dark/90 backdrop-blur-sm p-4 rounded-xl border border-primary/20">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline justify-between mb-2">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Game Details</h2>
           <span className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Turn: {turnNumber}</span>
+        </div>
+        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+          Mode: {getGameModeLabel()}
         </div>
       </div>
 

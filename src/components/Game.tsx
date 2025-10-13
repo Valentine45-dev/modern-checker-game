@@ -1,17 +1,22 @@
 import { useState, useEffect } from 'react';
-import { GameState, Piece, Position, PlayerColor, Move, Board as BoardType } from '../types';
+import { GameState, Piece, Position, PlayerColor, Move, Board as BoardType, GameMode } from '../types';
 import Board from './Board';
 import GameInfo from './GameInfo';
 import Controls from './Controls';
 import MoveHistory from './MoveHistory';
+import { useToast } from './ToastNotification';
 
 interface GameProps {
   onBackToMenu: () => void;
+  gameMode: GameMode;
 }
 
-const Game = ({ onBackToMenu }: GameProps) => {
+const Game = ({ onBackToMenu, gameMode }: GameProps) => {
   const [gameState, setGameState] = useState<GameState>(initializeGame());
   const [turnNumber, setTurnNumber] = useState(1);
+  const [gameStartTime] = useState(Date.now());
+  const [kingsPromoted, setKingsPromoted] = useState({ red: 0, black: 0 });
+  const { addToast } = useToast();
 
   // Initialize the board with pieces
   function initializeGame(): GameState {
@@ -115,9 +120,28 @@ const Game = ({ onBackToMenu }: GameProps) => {
 
   // Handle piece selection
   function handlePieceClick(piece: Piece) {
-    if (piece.color !== gameState.currentPlayer) return;
+    if (piece.color !== gameState.currentPlayer) {
+      addToast({
+        type: 'warning',
+        message: 'Wrong Turn!',
+        description: `It's ${gameState.currentPlayer} player's turn.`,
+        duration: 3000,
+      });
+      return;
+    }
     
     const validMoves = getValidMoves(piece);
+    
+    if (validMoves.length === 0) {
+      addToast({
+        type: 'info',
+        message: 'No Valid Moves',
+        description: 'This piece cannot move. Select another piece.',
+        duration: 3000,
+      });
+      return;
+    }
+    
     setGameState({
       ...gameState,
       selectedPiece: piece,
@@ -133,7 +157,15 @@ const Game = ({ onBackToMenu }: GameProps) => {
       move => move.row === position.row && move.col === position.col
     );
     
-    if (!isValid) return;
+    if (!isValid) {
+      addToast({
+        type: 'error',
+        message: 'Invalid Move',
+        description: 'You cannot move to this position. Select a highlighted square.',
+        duration: 3000,
+      });
+      return;
+    }
     
     movePiece(gameState.selectedPiece, position);
   }
@@ -153,6 +185,14 @@ const Game = ({ onBackToMenu }: GameProps) => {
       const midCol = (oldCol + newCol) / 2;
       capturedPiece = newBoard[midRow][midCol] || undefined;
       newBoard[midRow][midCol] = null;
+      
+      // Show capture notification
+      addToast({
+        type: 'success',
+        message: '⚔️ Piece Captured!',
+        description: `You captured ${capturedPiece?.color} player's piece!`,
+        duration: 3000,
+      });
     }
     
     // Move the piece
@@ -168,6 +208,19 @@ const Game = ({ onBackToMenu }: GameProps) => {
       if (movedPiece.type !== 'king') {
         movedPiece.type = 'king';
         becameKing = true;
+        // Track kings promoted
+        setKingsPromoted(prev => ({
+          ...prev,
+          [movedPiece.color]: prev[movedPiece.color] + 1
+        }));
+        
+        // Show king promotion notification
+        addToast({
+          type: 'success',
+          message: '👑 King Promoted!',
+          description: 'Your piece reached the opposite end and became a King!',
+          duration: 4000,
+        });
       }
     }
     
@@ -198,6 +251,18 @@ const Game = ({ onBackToMenu }: GameProps) => {
     
     // Switch player
     const nextPlayer: PlayerColor = gameState.currentPlayer === 'red' ? 'black' : 'red';
+    
+    // Show turn change notification (only if no capture to avoid notification spam)
+    if (!capturedPiece && !winner) {
+      setTimeout(() => {
+        addToast({
+          type: 'info',
+          message: `${nextPlayer === 'red' ? 'Red' : 'Black'} Player's Turn`,
+          description: 'Make your move!',
+          duration: 2000,
+        });
+      }, 500);
+    }
     
     setGameState({
       ...gameState,
@@ -302,6 +367,40 @@ const Game = ({ onBackToMenu }: GameProps) => {
   function handleNewGame() {
     setGameState(initializeGame());
     setTurnNumber(1);
+    setKingsPromoted({ red: 0, black: 0 });
+  }
+
+  // Handle rematch (keep same mode)
+  function handleRematch() {
+    handleNewGame();
+  }
+
+  // Calculate game duration
+  function getGameDuration(): string {
+    const duration = Math.floor((Date.now() - gameStartTime) / 1000);
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  // Get victory message
+  function getVictoryMessage(winner: PlayerColor): string {
+    const scoreDiff = Math.abs(gameState.score.red - gameState.score.black);
+    if (scoreDiff >= 8) return 'Decisive Victory!';
+    if (scoreDiff >= 5) return 'Dominant Performance!';
+    if (scoreDiff >= 3) return 'Well Played!';
+    return 'Close Match!';
+  }
+
+  // Get performance rating
+  function getPerformanceRating(winner: PlayerColor): string {
+    const moveCount = gameState.moveHistory.length;
+    const captures = gameState.score[winner];
+    
+    if (captures >= 10 && moveCount < 30) return 'Excellent Play! 🌟';
+    if (captures >= 8) return 'Great Performance! 🎯';
+    if (captures >= 5) return 'Good Effort! 👍';
+    return 'Nice Try! 💪';
   }
 
   // Handle resign
@@ -335,6 +434,7 @@ const Game = ({ onBackToMenu }: GameProps) => {
             turnNumber={turnNumber}
             capturedPieces={gameState.score}
             timer={gameState.playerTimers || { red: 300, black: 300 }}
+            gameMode={gameMode}
           />
           
           <MoveHistory moves={gameState.moveHistory} maxDisplay={5} />
@@ -354,29 +454,114 @@ const Game = ({ onBackToMenu }: GameProps) => {
         </div>
       </div>
       
-      {/* Game Over Modal */}
+      {/* Enhanced Game Over Modal */}
       {gameState.gameStatus === 'finished' && gameState.winner && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background-light dark:bg-background-dark p-8 rounded-xl shadow-2xl max-w-md w-full mx-4">
-            <h2 className="text-3xl font-bold text-center mb-4 text-gray-900 dark:text-white">
-              Game Over!
-            </h2>
-            <p className="text-xl text-center mb-6 text-gray-700 dark:text-gray-300">
-              <span className="capitalize font-bold">{gameState.winner}</span> player wins! 🎉
-            </p>
-            <div className="flex gap-4">
-              <button
-                onClick={handleNewGame}
-                className="flex-1 px-6 py-3 bg-primary text-white font-bold rounded-lg hover:bg-opacity-90 transition-all"
-              >
-                New Game
-              </button>
-              <button
-                onClick={onBackToMenu}
-                className="flex-1 px-6 py-3 bg-primary/20 text-gray-800 dark:text-gray-200 font-bold rounded-lg hover:bg-primary/30 transition-all"
-              >
-                Menu
-              </button>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-background-light dark:bg-background-dark rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden border border-primary/30">
+            {/* Header with Trophy */}
+            <div className="relative bg-gradient-to-br from-yellow-500/20 via-yellow-600/20 to-orange-500/20 p-8 text-center border-b border-primary/20">
+              <div className="flex justify-center mb-4">
+                <div className="p-4 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-lg">
+                  <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2L15 9L22 9L17 14L19 21L12 17L5 21L7 14L2 9L9 9L12 2Z" />
+                  </svg>
+                </div>
+              </div>
+              <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                You Won!
+              </h2>
+              <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
+                {getVictoryMessage(gameState.winner)}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-500">
+                Congratulations, you have successfully conquered the board.
+              </p>
+            </div>
+
+            {/* Game Statistics */}
+            <div className="p-6 space-y-4">
+              {/* Performance Rating */}
+              <div className="text-center p-3 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {getPerformanceRating(gameState.winner)}
+                </p>
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Total Moves */}
+                <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Moves</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{gameState.moveHistory.length}</p>
+                </div>
+
+                {/* Time Taken */}
+                <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Time Taken</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{getGameDuration()}</p>
+                </div>
+              </div>
+
+              {/* Pieces Captured */}
+              <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Pieces Captured</p>
+                <div className="flex justify-around">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-red-800" />
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">You</p>
+                      <p className="text-xl font-bold text-gray-900 dark:text-white">{gameState.score.red}</p>
+                    </div>
+                  </div>
+                  <div className="w-px bg-primary/20"></div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 border-2 border-gray-500" />
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Opponent</p>
+                      <p className="text-xl font-bold text-gray-900 dark:text-white">{gameState.score.black}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kings Promoted */}
+              <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Kings Promoted</p>
+                <div className="flex justify-around">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-yellow-500">👑</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{kingsPromoted.red}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Red</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-yellow-500">👑</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{kingsPromoted.black}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Black</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3 pt-2">
+                <button
+                  onClick={handleRematch}
+                  className="w-full py-3 px-6 font-bold text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-300 transform hover:scale-[1.02] shadow-lg"
+                >
+                  🔄 Rematch
+                </button>
+                <button
+                  onClick={handleNewGame}
+                  className="w-full py-3 px-6 font-bold text-gray-800 dark:text-white bg-primary/20 dark:bg-primary/30 hover:bg-primary/30 dark:hover:bg-primary/40 rounded-lg transition-all duration-300"
+                >
+                  ✨ New Game
+                </button>
+                <button
+                  onClick={onBackToMenu}
+                  className="w-full py-3 px-6 font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 rounded-lg transition-all duration-300"
+                >
+                  ← Return to Menu
+                </button>
+              </div>
             </div>
           </div>
         </div>
