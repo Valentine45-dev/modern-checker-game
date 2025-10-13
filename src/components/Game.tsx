@@ -5,6 +5,7 @@ import GameInfo from './GameInfo';
 import Controls from './Controls';
 import MoveHistory from './MoveHistory';
 import { useToast } from './ToastNotification';
+import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment, type AIMove } from '../utils/aiEngine';
 
 interface GameProps {
   onBackToMenu: () => void;
@@ -12,13 +13,18 @@ interface GameProps {
 }
 
 const Game = ({ onBackToMenu, gameMode }: GameProps) => {
-  const [gameState, setGameState] = useState<GameState>(initializeGame());
+  // Determine if current player is AI (moved to top for early initialization)
+  const isAIGame = gameMode !== 'pvp';
+  const aiColor: PlayerColor = 'red'; // AI always plays red
+
+  const [gameState, setGameState] = useState<GameState>(() => initializeGame());
   const [turnNumber, setTurnNumber] = useState(1);
   const [gameStartTime] = useState(Date.now());
   const [kingsPromoted, setKingsPromoted] = useState({ red: 0, black: 0 });
   const [multiJumpInProgress, setMultiJumpInProgress] = useState(false);
   const [currentJumpPiece, setCurrentJumpPiece] = useState<Piece | null>(null);
   const [accumulatedCaptures, setAccumulatedCaptures] = useState<Piece[]>([]);
+  const [aiThinking, setAiThinking] = useState(false);
   const { addToast } = useToast();
 
   // Initialize the board with pieces
@@ -55,9 +61,12 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       }
     }
     
+    // In AI mode, black (human) starts first. In PvP mode, red starts first.
+    const startingPlayer: PlayerColor = isAIGame ? 'black' : 'red';
+    
     return {
       board,
-      currentPlayer: 'red',
+      currentPlayer: startingPlayer,
       selectedPiece: null,
       validMoves: [],
       possibleCaptures: [],
@@ -387,6 +396,17 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
 
   // Handle piece selection
   function handlePieceClick(piece: Piece) {
+    // Disable interaction when AI is thinking
+    if (aiThinking) {
+      addToast({
+        type: 'info',
+        message: '🤖 AI is thinking...',
+        description: 'Please wait for the AI to make its move.',
+        duration: 2000,
+      });
+      return;
+    }
+
     // If in multi-jump, can only select the jumping piece
     if (multiJumpInProgress) {
       if (currentJumpPiece && piece.id === currentJumpPiece.id) {
@@ -664,9 +684,12 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     // Show turn change notification
     if (!winner && capturedPieces.length === 0) {
       setTimeout(() => {
+        const playerName = nextPlayer === 'red' 
+          ? (isAIGame ? '🤖 AI' : 'Red Player') 
+          : 'Black Player';
         addToast({
           type: 'info',
-          message: `${nextPlayer === 'red' ? 'Red' : 'Black'} Player's Turn`,
+          message: `${playerName}'s Turn`,
           description: 'Make your move!',
           duration: 2000,
         });
@@ -718,10 +741,13 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     }
     
     if (!opponentHasPieces || !opponentHasMoves) {
+      const winnerName = lastPlayer === 'red' 
+        ? (isAIGame ? '🤖 AI' : 'Red player') 
+        : 'Black player';
       addToast({
         type: 'success',
         message: '🎉 Game Over!',
-        description: `${lastPlayer === 'red' ? 'Red' : 'Black'} player wins!`,
+        description: `${winnerName} wins!`,
         duration: 5000,
       });
       return lastPlayer;
@@ -747,6 +773,143 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     return () => clearInterval(interval);
   }, [gameState.currentPlayer, gameState.gameStatus]);
 
+  // AI Move Logic
+  useEffect(() => {
+    // Early exit checks (but allow multi-jump continuation)
+    if (!isAIGame || 
+        gameState.gameStatus !== 'playing') {
+      return;
+    }
+
+    // Check if it's AI's turn OR if AI is in the middle of a multi-jump
+    const isAITurn = gameState.currentPlayer === aiColor;
+    const isAIMultiJump = multiJumpInProgress && currentJumpPiece?.color === aiColor;
+
+    if (!isAITurn && !isAIMultiJump) {
+      return;
+    }
+
+    // Don't trigger if already thinking (prevents duplicate calls)
+    if (aiThinking) {
+      return;
+    }
+
+    const difficulty = AI_DIFFICULTIES[gameMode];
+    if (!difficulty) {
+      console.error('AI difficulty not found for gameMode:', gameMode);
+      return;
+    }
+
+    console.log('🤖 AI Move Logic Triggered', {
+      isAITurn,
+      isAIMultiJump,
+      currentPlayer: gameState.currentPlayer,
+      aiColor,
+      multiJumpInProgress,
+      currentJumpPiece: currentJumpPiece?.id
+    });
+
+    // Show thinking message
+    setAiThinking(true);
+    const thinkingMsg = getAIThinkingMessage(gameMode);
+    addToast({
+      type: 'info',
+      message: '🤖 AI Thinking...',
+      description: thinkingMsg,
+      duration: difficulty.thinkingTime,
+    });
+
+    // Calculate and execute AI move after thinking time
+    const timer = setTimeout(() => {
+      try {
+        console.log('🤖 setTimeout executing...');
+        let aiMove: AIMove | null = null;
+
+        // Handle multi-jump continuation
+        if (isAIMultiJump && currentJumpPiece) {
+          console.log('🤖 AI continuing multi-jump');
+          
+          // Get valid continuation moves for the jumping piece
+          const { captures } = getValidMovesForPiece(currentJumpPiece);
+          
+          if (captures.length > 0) {
+            // Choose the best continuation (for now, just pick the first one)
+            // In a more advanced version, evaluate each continuation
+            const bestCapture = captures[0];
+            
+            aiMove = {
+              piece: currentJumpPiece,
+              targetPosition: bestCapture.position,
+              captureMove: bestCapture,
+              score: 0,
+              depth: 0
+            };
+            
+            console.log('🤖 AI chose multi-jump continuation:', aiMove);
+          } else {
+            console.error('🤖 AI multi-jump has no continuations available!');
+            setMultiJumpInProgress(false);
+            setCurrentJumpPiece(null);
+            setAiThinking(false);
+            return;
+          }
+        } else {
+          // Normal AI move calculation
+          console.log('🤖 AI calculating normal move, board:', gameState.board);
+          console.log('🤖 AI color:', aiColor);
+          console.log('🤖 Difficulty:', difficulty);
+          
+          aiMove = calculateAIMove(gameState.board, aiColor, difficulty);
+          console.log('🤖 AI calculated move:', aiMove);
+        }
+      
+      if (aiMove) {
+        // Find the actual piece on the board
+        const piece = gameState.board[aiMove.piece.position.row][aiMove.piece.position.col];
+        if (piece) {
+          console.log('🤖 AI executing move from', aiMove.piece.position, 'to', aiMove.targetPosition);
+          
+          // Execute the move
+          if (aiMove.captureMove) {
+            executeCapture(piece, aiMove.targetPosition, aiMove.captureMove);
+          } else {
+            executeNormalMove(piece, aiMove.targetPosition);
+          }
+
+          // Show AI move comment
+          const captureCount = aiMove.captureMove 
+            ? aiMove.captureMove.capturedPieces.length 
+            : 0;
+          const becameKing = (aiMove.piece.color === 'red' && aiMove.targetPosition.row === 7) ||
+                            (aiMove.piece.color === 'black' && aiMove.targetPosition.row === 0);
+          const comment = getAIMoveComment(captureCount, becameKing, gameMode);
+          
+          setTimeout(() => {
+            addToast({
+              type: 'success',
+              message: '🤖 AI Move',
+              description: comment,
+              duration: 3000,
+            });
+          }, 300);
+        } else {
+          console.error('🤖 AI piece not found on board at position:', aiMove.piece.position);
+        }
+      } else {
+        console.error('🤖 AI could not calculate a move!');
+      }
+      
+      setAiThinking(false);
+      } catch (error) {
+        console.error('🤖 AI Error:', error);
+        setAiThinking(false);
+      }
+    }, difficulty.thinkingTime);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
+
   // Handle new game
   function handleNewGame() {
     setGameState(initializeGame());
@@ -755,6 +918,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     setMultiJumpInProgress(false);
     setCurrentJumpPiece(null);
     setAccumulatedCaptures([]);
+    setAiThinking(false);
   }
 
   // Handle rematch
@@ -821,6 +985,15 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
               </p>
             </div>
           )}
+
+          {/* AI Thinking indicator */}
+          {aiThinking && (
+            <div className="mt-4 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg backdrop-blur-sm animate-pulse">
+              <p className="text-blue-300 font-semibold text-center">
+                🤖 AI is thinking...
+              </p>
+            </div>
+          )}
         </div>
         
         {/* Sidebar */}
@@ -864,7 +1037,9 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
                 </div>
               </div>
               <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-                {gameState.winner === 'red' ? 'Red' : 'Black'} Wins!
+                {gameState.winner === 'red' 
+                  ? (isAIGame ? '🤖 AI' : 'Red') 
+                  : 'Black'} Wins!
               </h2>
               <p className="text-base text-gray-600 dark:text-gray-400 mb-1">
                 {getVictoryMessage(gameState.winner)}
