@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { GameState, Piece, Position, PlayerColor, Move, Board as BoardType, GameMode } from '../types';
+import { GameState, Piece, Position, PlayerColor, Move, Board as BoardType, GameMode, PossibleMove } from '../types';
 import Board from './Board';
 import GameInfo from './GameInfo';
 import Controls from './Controls';
@@ -16,6 +16,9 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
   const [turnNumber, setTurnNumber] = useState(1);
   const [gameStartTime] = useState(Date.now());
   const [kingsPromoted, setKingsPromoted] = useState({ red: 0, black: 0 });
+  const [multiJumpInProgress, setMultiJumpInProgress] = useState(false);
+  const [currentJumpPiece, setCurrentJumpPiece] = useState<Piece | null>(null);
+  const [accumulatedCaptures, setAccumulatedCaptures] = useState<Piece[]>([]);
   const { addToast } = useToast();
 
   // Initialize the board with pieces
@@ -69,44 +72,224 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     };
   }
 
-  // Calculate valid moves for a piece
-  function getValidMoves(piece: Piece): Position[] {
-    const moves: Position[] = [];
-    const { row, col } = piece.position;
-    const direction = piece.color === 'red' ? 1 : -1;
+  function isValidPosition(row: number, col: number): boolean {
+    return row >= 0 && row < 8 && col >= 0 && col < 8;
+  }
+
+  // Check if positions are equal
+  function positionsEqual(pos1: Position, pos2: Position): boolean {
+    return pos1.row === pos2.row && pos1.col === pos2.col;
+  }
+
+  // ============================================
+  // FLYING KING LOGIC
+  // ============================================
+  
+  // Get all squares a flying king can reach in one direction
+  function getFlyingKingSquares(
+    piece: Piece,
+    board: BoardType,
+    direction: [number, number]
+  ): Position[] {
+    const squares: Position[] = [];
+    const [dRow, dCol] = direction;
+    let { row, col } = piece.position;
     
-    // Normal forward moves
-    const forwardDirections = piece.type === 'king' 
-      ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] 
-      : [[direction, -1], [direction, 1]];
-    
-    for (const [dRow, dCol] of forwardDirections) {
-      const newRow = row + dRow;
-      const newCol = col + dCol;
+    while (true) {
+      row += dRow;
+      col += dCol;
       
-      if (isValidPosition(newRow, newCol) && !gameState.board[newRow][newCol]) {
-        moves.push({ row: newRow, col: newCol });
+      if (!isValidPosition(row, col)) break;
+      if (board[row][col]) break; // Blocked by a piece
+      
+      squares.push({ row, col });
+    }
+    
+    return squares;
+  }
+
+  // Get flying king capture moves in one direction
+  function getFlyingKingCaptures(
+    piece: Piece,
+    board: BoardType,
+    direction: [number, number],
+    capturedSoFar: Piece[] = []
+  ): { landingSquares: Position[]; capturedPiece: Piece | null; capturePos: Position | null } {
+    const [dRow, dCol] = direction;
+    let { row, col } = piece.position;
+    let enemyPiece: Piece | null = null;
+    let capturePos: Position | null = null;
+    
+    // Fly until we hit a piece
+    while (true) {
+      row += dRow;
+      col += dCol;
+      
+      if (!isValidPosition(row, col)) break;
+      
+      const square = board[row][col];
+      if (square) {
+        // Check if it's an enemy piece and not already captured
+        if (square.color !== piece.color && 
+            !capturedSoFar.some(p => p.id === square.id)) {
+          enemyPiece = square;
+          capturePos = { row, col };
+        }
+        break;
       }
     }
     
-    // Capture moves (check all 4 directions for kings, 2 for normal)
-    const captureDirections = piece.type === 'king'
-      ? [[-1, -1], [-1, 1], [1, -1], [1, 1]]
-      : [[direction, -1], [direction, 1]];
-    
-    for (const [dRow, dCol] of captureDirections) {
-      const jumpRow = row + dRow * 2;
-      const jumpCol = col + dCol * 2;
-      const midRow = row + dRow;
-      const midCol = col + dCol;
+    // If we found an enemy, continue flying past it to find landing squares
+    const landingSquares: Position[] = [];
+    if (enemyPiece && capturePos) {
+      row = capturePos.row;
+      col = capturePos.col;
       
-      if (isValidPosition(jumpRow, jumpCol) && 
-          isValidPosition(midRow, midCol)) {
-        const middlePiece = gameState.board[midRow][midCol];
-        const jumpSquare = gameState.board[jumpRow][jumpCol];
+      while (true) {
+        row += dRow;
+        col += dCol;
         
-        if (middlePiece && middlePiece.color !== piece.color && !jumpSquare) {
-          moves.push({ row: jumpRow, col: jumpCol });
+        if (!isValidPosition(row, col)) break;
+        if (board[row][col]) break;
+        
+        landingSquares.push({ row, col });
+      }
+    }
+    
+    return { landingSquares, capturedPiece: enemyPiece, capturePos };
+  }
+
+  // ============================================
+  // MOVE CALCULATION - INTERNATIONAL RULES
+  // ============================================
+
+  // Calculate all possible captures for a piece (recursive for multi-jumps)
+  function getPossibleCaptures(
+    piece: Piece,
+    board: BoardType,
+    capturedSoFar: Piece[] = [],
+    currentPos?: Position
+  ): PossibleMove[] {
+    const pos = currentPos || piece.position;
+    const captures: PossibleMove[] = [];
+    
+    // All 4 diagonal directions (both forward and backward for captures)
+    const directions: [number, number][] = [
+      [-1, -1], [-1, 1], [1, -1], [1, 1]
+    ];
+
+    if (piece.type === 'king') {
+      // FLYING KING CAPTURES
+      for (const direction of directions) {
+        const { landingSquares, capturedPiece, capturePos } = getFlyingKingCaptures(
+          { ...piece, position: pos },
+          board,
+          direction,
+          capturedSoFar
+        );
+        
+        if (capturedPiece && capturePos) {
+          for (const landing of landingSquares) {
+            // Create temporary board for recursive checking
+            const tempBoard = board.map(row => [...row]);
+            tempBoard[pos.row][pos.col] = null;
+            tempBoard[capturePos.row][capturePos.col] = null;
+            tempBoard[landing.row][landing.col] = { ...piece, position: landing };
+            
+            const newCaptured = [...capturedSoFar, capturedPiece];
+            
+            // Check for continuation captures
+            const continuations = getPossibleCaptures(
+              { ...piece, position: landing },
+              tempBoard,
+              newCaptured,
+              landing
+            );
+            
+            captures.push({
+              position: landing,
+              isCapture: true,
+              capturedPieces: [capturedPiece],
+              continuations: continuations.length > 0 ? continuations : undefined
+            });
+          }
+        }
+      }
+    } else {
+      // NORMAL PIECE CAPTURES (can capture forward AND backward)
+      for (const [dRow, dCol] of directions) {
+        const jumpRow = pos.row + dRow * 2;
+        const jumpCol = pos.col + dCol * 2;
+        const midRow = pos.row + dRow;
+        const midCol = pos.col + dCol;
+        
+        if (isValidPosition(jumpRow, jumpCol) && isValidPosition(midRow, midCol)) {
+          const middlePiece = board[midRow][midCol];
+          const jumpSquare = board[jumpRow][jumpCol];
+          
+          if (middlePiece && 
+              middlePiece.color !== piece.color && 
+              !jumpSquare &&
+              !capturedSoFar.some(p => p.id === middlePiece.id)) {
+            
+            // Create temporary board
+            const tempBoard = board.map(row => [...row]);
+            tempBoard[pos.row][pos.col] = null;
+            tempBoard[midRow][midCol] = null;
+            tempBoard[jumpRow][jumpCol] = { ...piece, position: { row: jumpRow, col: jumpCol } };
+            
+            const newCaptured = [...capturedSoFar, middlePiece];
+            
+            // Check for continuation captures from the landing position
+            const continuations = getPossibleCaptures(
+              { ...piece, position: { row: jumpRow, col: jumpCol } },
+              tempBoard,
+              newCaptured,
+              { row: jumpRow, col: jumpCol }
+            );
+            
+            captures.push({
+              position: { row: jumpRow, col: jumpCol },
+              isCapture: true,
+              capturedPieces: [middlePiece],
+              continuations: continuations.length > 0 ? continuations : undefined
+            });
+          }
+        }
+      }
+    }
+    
+    return captures;
+  }
+
+  // Get normal (non-capture) moves for a piece
+  function getNormalMoves(piece: Piece, board: BoardType): Position[] {
+    const moves: Position[] = [];
+    const { row, col } = piece.position;
+    
+    if (piece.type === 'king') {
+      // FLYING KING - can move multiple squares in all 4 directions
+      const directions: [number, number][] = [
+        [-1, -1], [-1, 1], [1, -1], [1, 1]
+      ];
+      
+      for (const direction of directions) {
+        moves.push(...getFlyingKingSquares(piece, board, direction));
+      }
+    } else {
+      // NORMAL PIECE - only forward diagonal moves (one square)
+      const forwardDir = piece.color === 'red' ? 1 : -1;
+      const forwardMoves: [number, number][] = [
+        [forwardDir, -1],
+        [forwardDir, 1]
+      ];
+      
+      for (const [dRow, dCol] of forwardMoves) {
+        const newRow = row + dRow;
+        const newCol = col + dCol;
+        
+        if (isValidPosition(newRow, newCol) && !board[newRow][newCol]) {
+          moves.push({ row: newRow, col: newCol });
         }
       }
     }
@@ -114,12 +297,112 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     return moves;
   }
 
-  function isValidPosition(row: number, col: number): boolean {
-    return row >= 0 && row < 8 && col >= 0 && col < 8;
+  // Get all valid moves for current player (enforce mandatory capture)
+  function getAllValidMovesForPlayer(board: BoardType, player: PlayerColor): {
+    captures: Map<string, PossibleMove[]>;
+    normalMoves: Map<string, Position[]>;
+    mustCapture: boolean;
+  } {
+    const captures = new Map<string, PossibleMove[]>();
+    const normalMoves = new Map<string, Position[]>();
+    
+    // First, check all pieces for possible captures
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
+        if (piece && piece.color === player) {
+          const possibleCaptures = getPossibleCaptures(piece, board);
+          if (possibleCaptures.length > 0) {
+            captures.set(piece.id, possibleCaptures);
+          }
+        }
+      }
+    }
+    
+    // If captures exist, they are mandatory
+    const mustCapture = captures.size > 0;
+    
+    // Only calculate normal moves if no captures are available
+    if (!mustCapture) {
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = board[row][col];
+          if (piece && piece.color === player) {
+            const moves = getNormalMoves(piece, board);
+            if (moves.length > 0) {
+              normalMoves.set(piece.id, moves);
+            }
+          }
+        }
+      }
+    }
+    
+    return { captures, normalMoves, mustCapture };
   }
+
+  // Get valid moves/captures for a specific piece
+  function getValidMovesForPiece(piece: Piece): { 
+    moves: Position[]; 
+    captures: PossibleMove[];
+    mustCapture: boolean;
+  } {
+    const allMoves = getAllValidMovesForPlayer(gameState.board, piece.color);
+    
+    if (allMoves.mustCapture) {
+      const captures = allMoves.captures.get(piece.id) || [];
+      return { 
+        moves: [], 
+        captures, 
+        mustCapture: true 
+      };
+    } else {
+      const moves = allMoves.normalMoves.get(piece.id) || [];
+      return { 
+        moves, 
+        captures: [], 
+        mustCapture: false 
+      };
+    }
+  }
+
+  // Flatten capture tree to get all possible landing positions
+  function flattenCaptureMoves(captures: PossibleMove[]): Position[] {
+    const positions: Position[] = [];
+    
+    for (const capture of captures) {
+      positions.push(capture.position);
+      
+      // If there are continuations, recursively flatten them
+      if (capture.continuations && capture.continuations.length > 0) {
+        positions.push(...flattenCaptureMoves(capture.continuations));
+      }
+    }
+    
+    return positions;
+  }
+
+  // ============================================
+  // PIECE SELECTION & MOVEMENT
+  // ============================================
 
   // Handle piece selection
   function handlePieceClick(piece: Piece) {
+    // If in multi-jump, can only select the jumping piece
+    if (multiJumpInProgress) {
+      if (currentJumpPiece && piece.id === currentJumpPiece.id) {
+        const { moves, captures } = getValidMovesForPiece(piece);
+        const validPositions = captures.length > 0 ? flattenCaptureMoves(captures) : moves;
+        
+        setGameState({
+          ...gameState,
+          selectedPiece: piece,
+          validMoves: validPositions,
+          possibleCaptures: captures
+        });
+      }
+      return;
+    }
+    
     if (piece.color !== gameState.currentPlayer) {
       addToast({
         type: 'warning',
@@ -130,9 +413,9 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       return;
     }
     
-    const validMoves = getValidMoves(piece);
+    const { moves, captures, mustCapture } = getValidMovesForPiece(piece);
     
-    if (validMoves.length === 0) {
+    if (captures.length === 0 && moves.length === 0) {
       addToast({
         type: 'info',
         message: 'No Valid Moves',
@@ -142,10 +425,33 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       return;
     }
     
+    if (mustCapture && captures.length === 0) {
+      addToast({
+        type: 'warning',
+        message: 'Must Capture!',
+        description: 'Another piece has a mandatory capture available.',
+        duration: 3000,
+      });
+      return;
+    }
+    
+    const validPositions = captures.length > 0 ? flattenCaptureMoves(captures) : moves;
+    
+    if (mustCapture && captures.length > 0) {
+      addToast({
+        type: 'info',
+        message: '⚔️ Capture Available!',
+        description: 'You must capture the opponent\'s piece.',
+        duration: 3000,
+      });
+    }
+    
     setGameState({
       ...gameState,
       selectedPiece: piece,
-      validMoves
+      validMoves: validPositions,
+      possibleCaptures: captures,
+      mustCapture
     });
   }
 
@@ -154,7 +460,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     if (!gameState.selectedPiece) return;
     
     const isValid = gameState.validMoves.some(
-      move => move.row === position.row && move.col === position.col
+      move => positionsEqual(move, position)
     );
     
     if (!isValid) {
@@ -167,33 +473,131 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       return;
     }
     
-    movePiece(gameState.selectedPiece, position);
+    executeMoveOrCapture(gameState.selectedPiece, position);
   }
 
-  // Move piece and update game state
-  function movePiece(piece: Piece, newPosition: Position) {
+  // Execute move or capture
+  function executeMoveOrCapture(piece: Piece, newPosition: Position) {
+    const captureMove = findCaptureInTree(gameState.possibleCaptures, newPosition);
+    
+    if (captureMove) {
+      executeCapture(piece, newPosition, captureMove);
+    } else {
+      executeNormalMove(piece, newPosition);
+    }
+  }
+
+  // Find capture move in the tree
+  function findCaptureInTree(captures: PossibleMove[], targetPos: Position): PossibleMove | null {
+    for (const capture of captures) {
+      if (positionsEqual(capture.position, targetPos)) {
+        return capture;
+      }
+      if (capture.continuations) {
+        const found = findCaptureInTree(capture.continuations, targetPos);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  // Execute a capture move
+  function executeCapture(piece: Piece, newPosition: Position, captureMove: PossibleMove) {
     const newBoard = gameState.board.map(row => [...row]);
     const { row: oldRow, col: oldCol } = piece.position;
     const { row: newRow, col: newCol } = newPosition;
     
-    // Check if this is a capture move
-    const rowDiff = Math.abs(newRow - oldRow);
-    let capturedPiece: Piece | undefined;
+    // Add current captured pieces to accumulated list
+    const currentCaptures = [...accumulatedCaptures, ...captureMove.capturedPieces];
     
-    if (rowDiff === 2) {
-      const midRow = (oldRow + newRow) / 2;
-      const midCol = (oldCol + newCol) / 2;
-      capturedPiece = newBoard[midRow][midCol] || undefined;
-      newBoard[midRow][midCol] = null;
+    // Remove captured pieces from THIS jump
+    for (const captured of captureMove.capturedPieces) {
+      newBoard[captured.position.row][captured.position.col] = null;
+    }
+    
+    // Move the piece
+    let movedPiece: Piece = {
+      ...piece,
+      position: newPosition
+    };
+    
+    // Check for king promotion
+    let becameKing = false;
+    if ((movedPiece.color === 'red' && newRow === 7) || 
+        (movedPiece.color === 'black' && newRow === 0)) {
+      if (movedPiece.type !== 'king') {
+        movedPiece.type = 'king';
+        becameKing = true;
+        setKingsPromoted(prev => ({
+          ...prev,
+          [movedPiece.color]: prev[movedPiece.color] + 1
+        }));
+        
+        addToast({
+          type: 'success',
+          message: '👑 King Promoted!',
+          description: 'Your piece reached the opposite end and became a King!',
+          duration: 4000,
+        });
+      }
+    }
+    
+    newBoard[oldRow][oldCol] = null;
+    newBoard[newRow][newCol] = movedPiece;
+    
+    // Check if there are continuation captures
+    if (captureMove.continuations && captureMove.continuations.length > 0 && !becameKing) {
+      // Multi-jump in progress - DON'T update score yet, just accumulate
+      setMultiJumpInProgress(true);
+      setCurrentJumpPiece(movedPiece);
+      setAccumulatedCaptures(currentCaptures);
       
-      // Show capture notification
+      setGameState({
+        ...gameState,
+        board: newBoard,
+        selectedPiece: movedPiece,
+        validMoves: flattenCaptureMoves(captureMove.continuations),
+        possibleCaptures: captureMove.continuations,
+        score: gameState.score // Don't update score during multi-jump
+      });
+      
       addToast({
-        type: 'success',
-        message: '⚔️ Piece Captured!',
-        description: `You captured ${capturedPiece?.color} player's piece!`,
+        type: 'info',
+        message: `🔄 Continue Capturing! (${currentCaptures.length} captured)`,
+        description: 'You have more captures available. Keep going!',
         duration: 3000,
       });
+      
+      return;
     }
+    
+    // Capture sequence complete - now update score with ALL captures
+    const newScore = { ...gameState.score };
+    for (const captured of currentCaptures) {
+      if (captured.color === 'red') {
+        newScore.black++;
+      } else {
+        newScore.red++;
+      }
+    }
+    
+    // Show final capture notification
+    addToast({
+      type: 'success',
+      message: `⚔️ Captured ${currentCaptures.length} Piece${currentCaptures.length > 1 ? 's' : ''}!`,
+      description: currentCaptures.length > 1 ? 'Multi-jump complete!' : 'Great move!',
+      duration: 3000,
+    });
+    
+    // Capture sequence complete
+    finalizeTurn(newBoard, newScore, piece.position, newPosition, currentCaptures, becameKing);
+  }
+
+  // Execute a normal move
+  function executeNormalMove(piece: Piece, newPosition: Position) {
+    const newBoard = gameState.board.map(row => [...row]);
+    const { row: oldRow, col: oldCol } = piece.position;
+    const { row: newRow, col: newCol } = newPosition;
     
     // Move the piece
     const movedPiece: Piece = {
@@ -208,13 +612,11 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       if (movedPiece.type !== 'king') {
         movedPiece.type = 'king';
         becameKing = true;
-        // Track kings promoted
         setKingsPromoted(prev => ({
           ...prev,
           [movedPiece.color]: prev[movedPiece.color] + 1
         }));
         
-        // Show king promotion notification
         addToast({
           type: 'success',
           message: '👑 King Promoted!',
@@ -227,21 +629,28 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     newBoard[oldRow][oldCol] = null;
     newBoard[newRow][newCol] = movedPiece;
     
-    // Update score if piece was captured
-    const newScore = { ...gameState.score };
-    if (capturedPiece) {
-      if (capturedPiece.color === 'red') {
-        newScore.red++;
-      } else {
-        newScore.black++;
-      }
-    }
+    finalizeTurn(newBoard, gameState.score, piece.position, newPosition, [], becameKing);
+  }
+
+  // Finalize turn and switch player
+  function finalizeTurn(
+    newBoard: BoardType,
+    newScore: { red: number; black: number },
+    from: Position,
+    to: Position,
+    capturedPieces: Piece[],
+    becameKing: boolean
+  ) {
+    // Reset multi-jump state
+    setMultiJumpInProgress(false);
+    setCurrentJumpPiece(null);
+    setAccumulatedCaptures([]);
     
     // Create move record
     const move: Move = {
-      from: piece.position,
-      to: newPosition,
-      capturedPieces: capturedPiece ? [capturedPiece] : [],
+      from,
+      to,
+      capturedPieces,
       becameKing,
       timestamp: Date.now()
     };
@@ -252,8 +661,8 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     // Switch player
     const nextPlayer: PlayerColor = gameState.currentPlayer === 'red' ? 'black' : 'red';
     
-    // Show turn change notification (only if no capture to avoid notification spam)
-    if (!capturedPiece && !winner) {
+    // Show turn change notification
+    if (!winner && capturedPieces.length === 0) {
       setTimeout(() => {
         addToast({
           type: 'info',
@@ -270,10 +679,12 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       currentPlayer: nextPlayer,
       selectedPiece: null,
       validMoves: [],
+      possibleCaptures: [],
       moveHistory: [...gameState.moveHistory, move],
       score: newScore,
       gameStatus: winner ? 'finished' : 'playing',
-      winner
+      winner,
+      mustCapture: false
     });
     
     setTurnNumber(prev => prev + 1);
@@ -286,14 +697,18 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     let opponentHasPieces = false;
     let opponentHasMoves = false;
     
+    // Check if opponent has any pieces or moves
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const piece = board[row][col];
         if (piece && piece.color === opponentColor) {
           opponentHasPieces = true;
+          
           // Check if this piece has any valid moves
-          const moves = getValidMovesForPiece(piece, board);
-          if (moves.length > 0) {
+          const captures = getPossibleCaptures(piece, board);
+          const normalMoves = getNormalMoves(piece, board);
+          
+          if (captures.length > 0 || normalMoves.length > 0) {
             opponentHasMoves = true;
             break;
           }
@@ -303,47 +718,16 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     }
     
     if (!opponentHasPieces || !opponentHasMoves) {
+      addToast({
+        type: 'success',
+        message: '🎉 Game Over!',
+        description: `${lastPlayer === 'red' ? 'Red' : 'Black'} player wins!`,
+        duration: 5000,
+      });
       return lastPlayer;
     }
     
     return undefined;
-  }
-
-  // Helper to get valid moves for a specific piece and board state
-  function getValidMovesForPiece(piece: Piece, board: (Piece | null)[][]): Position[] {
-    const moves: Position[] = [];
-    const { row, col } = piece.position;
-    const direction = piece.color === 'red' ? 1 : -1;
-    
-    const directions = piece.type === 'king' 
-      ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] 
-      : [[direction, -1], [direction, 1]];
-    
-    for (const [dRow, dCol] of directions) {
-      const newRow = row + dRow;
-      const newCol = col + dCol;
-      
-      if (isValidPosition(newRow, newCol) && !board[newRow][newCol]) {
-        moves.push({ row: newRow, col: newCol });
-      }
-      
-      // Check captures
-      const jumpRow = row + dRow * 2;
-      const jumpCol = col + dCol * 2;
-      const midRow = row + dRow;
-      const midCol = col + dCol;
-      
-      if (isValidPosition(jumpRow, jumpCol) && isValidPosition(midRow, midCol)) {
-        const middlePiece = board[midRow][midCol];
-        const jumpSquare = board[jumpRow][jumpCol];
-        
-        if (middlePiece && middlePiece.color !== piece.color && !jumpSquare) {
-          moves.push({ row: jumpRow, col: jumpCol });
-        }
-      }
-    }
-    
-    return moves;
   }
 
   // Timer countdown
@@ -368,9 +752,12 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     setGameState(initializeGame());
     setTurnNumber(1);
     setKingsPromoted({ red: 0, black: 0 });
+    setMultiJumpInProgress(false);
+    setCurrentJumpPiece(null);
+    setAccumulatedCaptures([]);
   }
 
-  // Handle rematch (keep same mode)
+  // Handle rematch
   function handleRematch() {
     handleNewGame();
   }
@@ -425,6 +812,15 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
             onSquareClick={handleSquareClick}
             onPieceClick={handlePieceClick}
           />
+          
+          {/* Multi-jump indicator */}
+          {multiJumpInProgress && (
+            <div className="mt-4 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg backdrop-blur-sm">
+              <p className="text-yellow-300 font-semibold text-center">
+                🔄 Multi-Jump in Progress - Continue capturing!
+              </p>
+            </div>
+          )}
         </div>
         
         {/* Sidebar */}
@@ -454,7 +850,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
         </div>
       </div>
       
-      {/* Enhanced Game Over Modal */}
+      {/* Game Over Modal */}
       {gameState.gameStatus === 'finished' && gameState.winner && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-background-light dark:bg-background-dark rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden border border-primary/30">
@@ -468,7 +864,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
                 </div>
               </div>
               <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                You Won!
+                {gameState.winner === 'red' ? 'Red' : 'Black'} Wins!
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
                 {getVictoryMessage(gameState.winner)}
@@ -509,7 +905,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-red-800" />
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">You</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Red</p>
                       <p className="text-xl font-bold text-gray-900 dark:text-white">{gameState.score.red}</p>
                     </div>
                   </div>
@@ -517,7 +913,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 border-2 border-gray-500" />
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Opponent</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Black</p>
                       <p className="text-xl font-bold text-gray-900 dark:text-white">{gameState.score.black}</p>
                     </div>
                   </div>
@@ -571,4 +967,3 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
 };
 
 export default Game;
-
