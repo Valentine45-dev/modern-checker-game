@@ -11,6 +11,8 @@ export default {
         primary: "#141414",
         "background-light": "#f7f7f7",
         "background-dark": "#191919",
+        "board-light": "#EADCCF",
+        "board-dark": "#A98467",
       },
       fontFamily: {
         display: ["Space Grotesk", "system-ui", "sans-serif"],
