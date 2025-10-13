@@ -852,55 +852,55 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       
       {/* Game Over Modal */}
       {gameState.gameStatus === 'finished' && gameState.winner && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-background-light dark:bg-background-dark rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden border border-primary/30">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-background-light dark:bg-background-dark rounded-2xl shadow-2xl max-w-lg w-full mx-4 my-8 max-h-[85vh] overflow-y-auto border border-primary/30">
             {/* Header with Trophy */}
-            <div className="relative bg-gradient-to-br from-yellow-500/20 via-yellow-600/20 to-orange-500/20 p-8 text-center border-b border-primary/20">
-              <div className="flex justify-center mb-4">
-                <div className="p-4 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-lg">
-                  <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <div className="relative bg-gradient-to-br from-yellow-500/20 via-yellow-600/20 to-orange-500/20 p-6 text-center border-b border-primary/20">
+              <div className="flex justify-center mb-3">
+                <div className="p-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-lg">
+                  <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2L15 9L22 9L17 14L19 21L12 17L5 21L7 14L2 9L9 9L12 2Z" />
                   </svg>
                 </div>
               </div>
-              <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                 {gameState.winner === 'red' ? 'Red' : 'Black'} Wins!
               </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
+              <p className="text-base text-gray-600 dark:text-gray-400 mb-1">
                 {getVictoryMessage(gameState.winner)}
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-500">
                 Congratulations, you have successfully conquered the board.
               </p>
             </div>
 
             {/* Game Statistics */}
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-3">
               {/* Performance Rating */}
-              <div className="text-center p-3 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
-                <p className="text-lg font-bold text-gray-900 dark:text-white">
+              <div className="text-center p-2 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
+                <p className="text-base font-bold text-gray-900 dark:text-white">
                   {getPerformanceRating(gameState.winner)}
                 </p>
               </div>
 
               {/* Stats Grid */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Total Moves */}
-                <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
+                <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Moves</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{gameState.moveHistory.length}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{gameState.moveHistory.length}</p>
                 </div>
 
                 {/* Time Taken */}
-                <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
+                <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Time Taken</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{getGameDuration()}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{getGameDuration()}</p>
                 </div>
               </div>
 
               {/* Pieces Captured */}
-              <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Pieces Captured</p>
+              <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Pieces Captured</p>
                 <div className="flex justify-around">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-red-800" />
@@ -921,39 +921,39 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
               </div>
 
               {/* Kings Promoted */}
-              <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/20">
+              <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Kings Promoted</p>
                 <div className="flex justify-around">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-yellow-500">👑</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{kingsPromoted.red}</p>
+                    <p className="text-xl font-bold text-yellow-500">👑</p>
+                    <p className="text-base font-bold text-gray-900 dark:text-white">{kingsPromoted.red}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Red</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-yellow-500">👑</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{kingsPromoted.black}</p>
+                    <p className="text-xl font-bold text-yellow-500">👑</p>
+                    <p className="text-base font-bold text-gray-900 dark:text-white">{kingsPromoted.black}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Black</p>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-3 pt-2">
+              <div className="space-y-2 pt-1">
                 <button
                   onClick={handleRematch}
-                  className="w-full py-3 px-6 font-bold text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-300 transform hover:scale-[1.02] shadow-lg"
+                  className="w-full py-2.5 px-6 font-bold text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-300 transform hover:scale-[1.02] shadow-lg"
                 >
                   🔄 Rematch
                 </button>
                 <button
                   onClick={handleNewGame}
-                  className="w-full py-3 px-6 font-bold text-gray-800 dark:text-white bg-primary/20 dark:bg-primary/30 hover:bg-primary/30 dark:hover:bg-primary/40 rounded-lg transition-all duration-300"
+                  className="w-full py-2.5 px-6 font-bold text-gray-800 dark:text-white bg-primary/20 dark:bg-primary/30 hover:bg-primary/30 dark:hover:bg-primary/40 rounded-lg transition-all duration-300"
                 >
                   ✨ New Game
                 </button>
                 <button
                   onClick={onBackToMenu}
-                  className="w-full py-3 px-6 font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 rounded-lg transition-all duration-300"
+                  className="w-full py-2.5 px-6 font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 rounded-lg transition-all duration-300"
                 >
                   ← Return to Menu
                 </button>
