@@ -6,27 +6,57 @@ import Controls from './Controls';
 import MoveHistory from './MoveHistory';
 import { useToast } from './ToastNotification';
 import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment, type AIMove } from '../utils/aiEngine';
+import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
 
 interface GameProps {
   onBackToMenu: () => void;
+  onGameQuit?: () => void;
   gameMode: GameMode;
 }
 
-const Game = ({ onBackToMenu, gameMode }: GameProps) => {
+const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
   // Determine if current player is AI (moved to top for early initialization)
   const isAIGame = gameMode !== 'pvp';
   const aiColor: PlayerColor = 'red'; // AI always plays red
 
-  const [gameState, setGameState] = useState<GameState>(() => initializeGame());
-  const [turnNumber, setTurnNumber] = useState(1);
-  const [gameStartTime] = useState(Date.now());
-  const [kingsPromoted, setKingsPromoted] = useState({ red: 0, black: 0 });
-  const [multiJumpInProgress, setMultiJumpInProgress] = useState(false);
-  const [currentJumpPiece, setCurrentJumpPiece] = useState<Piece | null>(null);
-  const [accumulatedCaptures, setAccumulatedCaptures] = useState<Piece[]>([]);
+  const [gameState, setGameState] = useState<GameState>(() => {
+    // Try to load saved game state
+    const savedState = loadGameState();
+    if (savedState && savedState.gameMode === gameMode) {
+      return savedState;
+    }
+    return initializeGame();
+  });
+  const [turnNumber, setTurnNumber] = useState(() => {
+    const savedState = loadGameState();
+    return savedState?.turnNumber || 1;
+  });
+  const [gameStartTime] = useState(() => {
+    const savedState = loadGameState();
+    return savedState?.gameStartTime || Date.now();
+  });
+  const [kingsPromoted, setKingsPromoted] = useState(() => {
+    const savedState = loadGameState();
+    return savedState?.kingsPromoted || { red: 0, black: 0 };
+  });
+  const [multiJumpInProgress, setMultiJumpInProgress] = useState(() => {
+    const savedState = loadGameState();
+    return savedState?.multiJumpInProgress || false;
+  });
+  const [currentJumpPiece, setCurrentJumpPiece] = useState<Piece | null>(() => {
+    const savedState = loadGameState();
+    return savedState?.currentJumpPiece || null;
+  });
+  const [accumulatedCaptures, setAccumulatedCaptures] = useState<Piece[]>(() => {
+    const savedState = loadGameState();
+    return savedState?.accumulatedCaptures || [];
+  });
   const [aiThinking, setAiThinking] = useState(false);
   const [shakingPieceId, setShakingPieceId] = useState<string | null>(null);
-  const [piecesWithCaptures, setPiecesWithCaptures] = useState<Set<string>>(new Set());
+  const [piecesWithCaptures, setPiecesWithCaptures] = useState<Set<string>>(() => {
+    const savedState = loadGameState();
+    return new Set(savedState?.piecesWithCaptures || []);
+  });
   const { addToast } = useToast();
 
   // Initialize the board with pieces
@@ -710,6 +740,11 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
       }, 500);
     }
     
+    // Clear saved game state if game is finished
+    if (winner) {
+      clearGameState();
+    }
+    
     setGameState({
       ...gameState,
       board: newBoard,
@@ -786,6 +821,23 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     
     setPiecesWithCaptures(capturesMap);
   }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
+
+  // Auto-save game state after each move
+  useEffect(() => {
+    if (gameState.gameStatus === 'playing') {
+      saveGameState(
+        gameState,
+        turnNumber,
+        gameStartTime,
+        kingsPromoted,
+        multiJumpInProgress,
+        currentJumpPiece,
+        accumulatedCaptures,
+        aiThinking,
+        piecesWithCaptures
+      );
+    }
+  }, [gameState, turnNumber, gameStartTime, kingsPromoted, multiJumpInProgress, currentJumpPiece, accumulatedCaptures, aiThinking, piecesWithCaptures]);
 
   // Timer countdown
   useEffect(() => {
@@ -943,6 +995,9 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
 
   // Handle new game
   function handleNewGame() {
+    // Clear any saved game state
+    clearGameState();
+    
     setGameState(initializeGame());
     setTurnNumber(1);
     setKingsPromoted({ red: 0, black: 0 });
@@ -996,6 +1051,47 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     });
   }
 
+  // Handle quit game
+  function handleQuit() {
+    // Show custom confirmation dialog
+    addToast({
+      type: 'confirm',
+      message: '🚪 Quit Game?',
+      description: 'This will clear all saved game data and return to the main menu. This action cannot be undone.',
+      confirmText: 'Quit',
+      cancelText: 'Cancel',
+      onConfirm: () => {
+        // Clear all localStorage data
+        clearAllGameData();
+        
+        // Notify parent component that game was quit
+        onGameQuit?.();
+        
+        // Show confirmation toast
+        addToast({
+          type: 'info',
+          message: '🚪 Game Quit',
+          description: 'All game data has been cleared. Returning to menu.',
+          duration: 3000,
+        });
+        
+        // Return to menu after a short delay
+        setTimeout(() => {
+          onBackToMenu();
+        }, 1000);
+      },
+      onCancel: () => {
+        // User cancelled, do nothing
+        addToast({
+          type: 'info',
+          message: 'Game Continued',
+          description: 'You can continue playing.',
+          duration: 2000,
+        });
+      }
+    });
+  }
+
   return (
     <main className="flex-grow flex items-center justify-center py-4 sm:py-8 px-2 sm:px-4 lg:px-8">
       <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-center gap-4 sm:gap-6 lg:gap-8">
@@ -1042,10 +1138,11 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
           
           <MoveHistory moves={gameState.moveHistory} maxDisplay={5} />
           
-          <Controls
-            onNewGame={handleNewGame}
-            onResign={handleResign}
-            canUndo={false}
+          <Controls 
+            onNewGame={handleNewGame} 
+            onResign={handleResign} 
+            onQuit={handleQuit}
+            canUndo={false} 
           />
           
           <button

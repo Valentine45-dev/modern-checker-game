@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 
 // Toast types
-type ToastType = 'success' | 'error' | 'info' | 'warning';
+type ToastType = 'success' | 'error' | 'info' | 'warning' | 'confirm';
 type ToastPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center';
 
 interface Toast {
@@ -10,11 +10,16 @@ interface Toast {
   message: string;
   description?: string;
   duration?: number;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 interface ToastContextType {
   toasts: Toast[];
   addToast: (toast: Omit<Toast, 'id'>) => void;
+  addConfirmDialog: (toast: Omit<Toast, 'id'>) => void;
   removeToast: (id: string) => void;
 }
 
@@ -42,11 +47,25 @@ export const ToastProvider: React.FC<{ children: React.ReactNode; position?: Toa
     const newToast = { ...toast, id };
     setToasts((prev) => [...prev, newToast]);
 
-    // Auto remove after duration
-    const duration = toast.duration || 5000;
-    setTimeout(() => {
-      removeToast(id);
-    }, duration);
+    // Auto remove after duration (except for confirm dialogs)
+    if (toast.type !== 'confirm') {
+      const duration = toast.duration || 5000;
+      setTimeout(() => {
+        removeToast(id);
+      }, duration);
+    }
+  }, []);
+
+  const addConfirmDialog = useCallback((toast: Omit<Toast, 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast: Toast = { 
+      ...toast, 
+      id, 
+      type: 'confirm',
+      confirmText: toast.confirmText || 'OK',
+      cancelText: toast.cancelText || 'Cancel'
+    };
+    setToasts((prev) => [...prev, newToast]);
   }, []);
 
   const removeToast = useCallback((id: string) => {
@@ -64,7 +83,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode; position?: Toa
   };
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
+    <ToastContext.Provider value={{ toasts, addToast, addConfirmDialog, removeToast }}>
       {children}
       <div className={`fixed ${positionClasses[position]} z-50 flex flex-col gap-3 pointer-events-none`}>
         {toasts.map((toast) => (
@@ -116,6 +135,12 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         );
+      case 'confirm':
+        return (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
     }
   };
 
@@ -129,6 +154,10 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
         return 'from-yellow-500/20 to-amber-500/20 border-yellow-500/30 text-yellow-400';
       case 'info':
         return 'from-blue-500/20 to-cyan-500/20 border-blue-500/30 text-blue-400';
+      case 'confirm':
+        return 'from-orange-500/20 to-red-500/20 border-orange-500/30 text-orange-400';
+      default:
+        return 'from-gray-500/20 to-slate-500/20 border-gray-500/30 text-gray-400';
     }
   };
 
@@ -166,26 +195,54 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
             )}
           </div>
 
-          {/* Close button */}
-          <button
-            onClick={handleClose}
-            className="flex-shrink-0 text-white/60 hover:text-white transition-colors duration-200"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Close button (only for non-confirm toasts) */}
+          {toast.type !== 'confirm' && (
+            <button
+              onClick={handleClose}
+              className="flex-shrink-0 text-white/60 hover:text-white transition-colors duration-200"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
-        {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 rounded-b-xl overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-white/40 to-white/20 animate-shrink"
-            style={{
-              animationDuration: `${toast.duration || 5000}ms`,
-            }}
-          />
-        </div>
+        {/* Progress bar (only for non-confirm toasts) */}
+        {toast.type !== 'confirm' && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 rounded-b-xl overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-white/40 to-white/20 animate-shrink"
+              style={{
+                animationDuration: `${toast.duration || 5000}ms`,
+              }}
+            />
+          </div>
+        )}
+
+        {/* Confirmation buttons */}
+        {toast.type === 'confirm' && (
+          <div className="mt-4 flex gap-2 justify-end">
+            <button
+              onClick={() => {
+                toast.onCancel?.();
+                handleClose();
+              }}
+              className="px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200"
+            >
+              {toast.cancelText || 'Cancel'}
+            </button>
+            <button
+              onClick={() => {
+                toast.onConfirm?.();
+                handleClose();
+              }}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-orange-500/80 hover:bg-orange-500 rounded-lg transition-all duration-200 hover:scale-105"
+            >
+              {toast.confirmText || 'OK'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
