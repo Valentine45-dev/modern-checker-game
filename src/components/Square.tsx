@@ -10,6 +10,7 @@ interface SquareProps {
   isSelected: boolean;
   onSquareClick: (position: Position) => void;
   onPieceClick: (piece: PieceType) => void;
+  isShaking: boolean;
 }
 
 const Square = ({ 
@@ -19,7 +20,8 @@ const Square = ({
   isValidMove, 
   isSelected,
   onSquareClick,
-  onPieceClick 
+  onPieceClick,
+  isShaking
 }: SquareProps) => {
   // Use inline styles to ensure colors show properly
   const bgColor = isLight ? '#EADCCF' : '#A98467';
@@ -44,6 +46,7 @@ const Square = ({
           <Piece 
             piece={piece} 
             isSelected={isSelected}
+            isShaking={isShaking}
             onClick={() => onPieceClick(piece)}
           />
         )}

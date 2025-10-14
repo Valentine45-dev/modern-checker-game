@@ -7,9 +7,10 @@ interface BoardProps {
   validMoves: Position[];
   onSquareClick: (position: Position) => void;
   onPieceClick: (piece: PieceType) => void;
+  shakingPieceId: string | null;
 }
 
-const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick }: BoardProps) => {
+const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, shakingPieceId }: BoardProps) => {
   const isValidMove = (row: number, col: number): boolean => {
     return validMoves.some(move => move.row === row && move.col === col);
   };
@@ -35,6 +36,7 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick }
                   isSelected={isSelected(piece)}
                   onSquareClick={onSquareClick}
                   onPieceClick={onPieceClick}
+                  isShaking={piece !== null && piece.id === shakingPieceId}
                 />
               );
             })

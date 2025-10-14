@@ -19,9 +19,9 @@ export const AI_DIFFICULTIES: Record<string, AIDifficulty> = {
     randomness: 0.15,
   },
   'ai-hard': {
-    depth: 4,
-    thinkingTime: 1500,
-    randomness: 0.03,
+    depth: 5,
+    thinkingTime: 1200,
+    randomness: 0.0,
   },
 };
 

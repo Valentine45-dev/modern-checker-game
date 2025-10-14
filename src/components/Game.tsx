@@ -25,6 +25,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
   const [currentJumpPiece, setCurrentJumpPiece] = useState<Piece | null>(null);
   const [accumulatedCaptures, setAccumulatedCaptures] = useState<Piece[]>([]);
   const [aiThinking, setAiThinking] = useState(false);
+  const [shakingPieceId, setShakingPieceId] = useState<string | null>(null);
   const { addToast } = useToast();
 
   // Initialize the board with pieces
@@ -436,6 +437,10 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     const { moves, captures, mustCapture } = getValidMovesForPiece(piece);
     
     if (captures.length === 0 && moves.length === 0) {
+      // Trigger shake animation
+      setShakingPieceId(piece.id);
+      setTimeout(() => setShakingPieceId(null), 500); // Clear after animation
+      
       addToast({
         type: 'info',
         message: 'No Valid Moves',
@@ -975,6 +980,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
             validMoves={gameState.validMoves}
             onSquareClick={handleSquareClick}
             onPieceClick={handlePieceClick}
+            shakingPieceId={shakingPieceId}
           />
           
           {/* Multi-jump indicator */}
