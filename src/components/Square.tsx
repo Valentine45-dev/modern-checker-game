@@ -11,6 +11,7 @@ interface SquareProps {
   onSquareClick: (position: Position) => void;
   onPieceClick: (piece: PieceType) => void;
   isShaking: boolean;
+  hasCapture: boolean;
 }
 
 const Square = ({ 
@@ -21,7 +22,8 @@ const Square = ({
   isSelected,
   onSquareClick,
   onPieceClick,
-  isShaking
+  isShaking,
+  hasCapture
 }: SquareProps) => {
   // Use inline styles to ensure colors show properly
   const bgColor = isLight ? '#EADCCF' : '#A98467';
@@ -47,6 +49,7 @@ const Square = ({
             piece={piece} 
             isSelected={isSelected}
             isShaking={isShaking}
+            hasCapture={hasCapture}
             onClick={() => onPieceClick(piece)}
           />
         )}

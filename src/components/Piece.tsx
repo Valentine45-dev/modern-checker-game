@@ -4,10 +4,11 @@ interface PieceProps {
   piece: PieceType;
   isSelected: boolean;
   isShaking: boolean;
+  hasCapture: boolean;
   onClick: () => void;
 }
 
-const Piece = ({ piece, isSelected, isShaking, onClick }: PieceProps) => {
+const Piece = ({ piece, isSelected, isShaking, hasCapture, onClick }: PieceProps) => {
   const baseClasses = "w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full shadow-lg cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95";
   
   const colorClasses = piece.color === 'red' 
@@ -18,10 +19,12 @@ const Piece = ({ piece, isSelected, isShaking, onClick }: PieceProps) => {
   
   const shakeClasses = isShaking ? "animate-shake-no" : "";
   
+  const captureGlowClasses = hasCapture && !isSelected ? "animate-capture-glow" : "";
+  
   return (
     <div 
       onClick={onClick}
-      className={`${baseClasses} ${colorClasses} ${selectedClasses} ${shakeClasses} flex items-center justify-center relative`}
+      className={`${baseClasses} ${colorClasses} ${selectedClasses} ${shakeClasses} ${captureGlowClasses} flex items-center justify-center relative`}
     >
       {piece.type === 'king' && (
         <svg 

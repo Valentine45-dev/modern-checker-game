@@ -79,5 +79,23 @@
   .animate-shake-no {
     animation: shake-no 0.5s ease-in-out;
   }
+
+  /* Glow animation for pieces with captures available */
+  @keyframes capture-glow {
+    0%, 100% {
+      box-shadow: 0 0 10px 2px rgba(234, 179, 8, 0.3),
+                  0 0 20px 4px rgba(234, 179, 8, 0.2),
+                  0 0 30px 6px rgba(234, 179, 8, 0.1);
+    }
+    50% {
+      box-shadow: 0 0 20px 4px rgba(234, 179, 8, 0.6),
+                  0 0 30px 8px rgba(234, 179, 8, 0.4),
+                  0 0 40px 12px rgba(234, 179, 8, 0.2);
+    }
+  }
+
+  .animate-capture-glow {
+    animation: capture-glow 2s ease-in-out infinite;
+  }
 }
 

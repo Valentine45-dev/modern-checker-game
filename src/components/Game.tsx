@@ -26,6 +26,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
   const [accumulatedCaptures, setAccumulatedCaptures] = useState<Piece[]>([]);
   const [aiThinking, setAiThinking] = useState(false);
   const [shakingPieceId, setShakingPieceId] = useState<string | null>(null);
+  const [piecesWithCaptures, setPiecesWithCaptures] = useState<Set<string>>(new Set());
   const { addToast } = useToast();
 
   // Initialize the board with pieces
@@ -761,10 +762,27 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     return undefined;
   }
 
+  // Update pieces with captures available
+  useEffect(() => {
+    if (gameState.gameStatus !== 'playing' || multiJumpInProgress) return;
+
+    const capturesMap = new Set<string>();
+    const allMoves = getAllValidMovesForPlayer(gameState.board, gameState.currentPlayer);
+    
+    // If there are mandatory captures, highlight those pieces
+    if (allMoves.mustCapture) {
+      allMoves.captures.forEach((_, pieceId) => {
+        capturesMap.add(pieceId);
+      });
+    }
+    
+    setPiecesWithCaptures(capturesMap);
+  }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
+
   // Timer countdown
   useEffect(() => {
     if (gameState.gameStatus !== 'playing' || !gameState.playerTimers) return;
-    
+
     const interval = setInterval(() => {
       setGameState(prev => ({
         ...prev,
@@ -774,7 +792,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
         }
       }));
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, [gameState.currentPlayer, gameState.gameStatus]);
 
@@ -924,6 +942,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     setCurrentJumpPiece(null);
     setAccumulatedCaptures([]);
     setAiThinking(false);
+    setPiecesWithCaptures(new Set());
   }
 
   // Handle rematch
@@ -981,6 +1000,7 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
             onSquareClick={handleSquareClick}
             onPieceClick={handlePieceClick}
             shakingPieceId={shakingPieceId}
+            piecesWithCaptures={piecesWithCaptures}
           />
           
           {/* Multi-jump indicator */}
