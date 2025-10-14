@@ -426,6 +426,10 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     }
     
     if (piece.color !== gameState.currentPlayer) {
+      // Trigger shake animation for wrong turn
+      setShakingPieceId(piece.id);
+      setTimeout(() => setShakingPieceId(null), 500); // Clear after animation
+      
       addToast({
         type: 'warning',
         message: 'Wrong Turn!',
@@ -452,6 +456,10 @@ const Game = ({ onBackToMenu, gameMode }: GameProps) => {
     }
     
     if (mustCapture && captures.length === 0) {
+      // Trigger shake animation for mandatory capture violation
+      setShakingPieceId(piece.id);
+      setTimeout(() => setShakingPieceId(null), 500); // Clear after animation
+      
       addToast({
         type: 'warning',
         message: 'Must Capture!',
