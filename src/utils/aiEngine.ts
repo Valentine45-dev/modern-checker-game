@@ -21,7 +21,7 @@ export const AI_DIFFICULTIES: Record<string, AIDifficulty> = {
   'ai-hard': {
     depth: 4,
     thinkingTime: 1500,
-    randomness: 0.05,
+    randomness: 0.03,
   },
 };
 
@@ -37,13 +37,14 @@ export interface AIMove {
 // Board evaluation weights
 const WEIGHTS = {
   PIECE: 100,
-  KING: 150,
-  BACK_ROW: 15,
-  MIDDLE_CONTROL: 10,
-  ADVANCED_POSITION: 5,
-  EDGE_PENALTY: -10,
-  SAFE_PIECE: 5,
-  MOBILITY: 3,
+  KING: 180,              // Increased king value
+  BACK_ROW: 20,           // Increased back row protection
+  MIDDLE_CONTROL: 15,     // Increased center control importance
+  ADVANCED_POSITION: 8,   // Increased advancement bonus
+  EDGE_PENALTY: -15,      // Increased edge penalty
+  SAFE_PIECE: 10,         // Increased safety importance
+  MOBILITY: 5,            // Increased mobility importance
+  CAPTURE_THREAT: 15,     // New: Bonus for threatening captures
 };
 
 // Position utilities
@@ -351,6 +352,13 @@ function evaluateBoard(board: BoardType, aiColor: PlayerColor): number {
   const opponentMobility = opponentMoves.captures.size + opponentMoves.normalMoves.size;
   
   score += (aiMobility - opponentMobility) * WEIGHTS.MOBILITY;
+  
+  // Capture threat bonus (having capture opportunities is valuable)
+  const aiCaptureCount = aiMoves.captures.size;
+  const opponentCaptureCount = opponentMoves.captures.size;
+  
+  score += aiCaptureCount * WEIGHTS.CAPTURE_THREAT;
+  score -= opponentCaptureCount * WEIGHTS.CAPTURE_THREAT; // Penalty if opponent can capture
   
   return score;
 }
