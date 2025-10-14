@@ -3,11 +3,12 @@ import Header from './components/Header';
 import MainMenu from './components/MainMenu';
 import Game from './components/Game';
 import GameModeSelection from './components/GameModeSelection';
+import HowToPlay from './components/HowToPlay';
 import { ToastProvider } from './components/ToastNotification';
 import { GameMode } from './types';
 import { hasGameInProgress, getSavedGameMode, clearGameState } from './utils/gamePersistence';
 
-type AppScreen = 'menu' | 'mode-selection' | 'game' | 'settings';
+type AppScreen = 'menu' | 'mode-selection' | 'game' | 'settings' | 'how-to-play';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('menu');
@@ -85,6 +86,10 @@ function App() {
     setCurrentScreen('settings');
   };
 
+  const handleHowToPlay = () => {
+    setCurrentScreen('how-to-play');
+  };
+
   return (
     <ToastProvider position="top-right">
       <div className="font-display bg-background-light dark:bg-background-dark text-white checker-bg min-h-screen flex flex-col">
@@ -96,6 +101,7 @@ function App() {
             onNewGame={handleNewGame}
             onResumeGame={hasGameInProgressState ? handleResumeGame : undefined}
             onSettings={handleSettings}
+            onHowToPlay={handleHowToPlay}
             hasGameInProgress={hasGameInProgressState}
           />
         )}
@@ -114,6 +120,10 @@ function App() {
             onGameQuit={handleGameQuit}
             gameMode={selectedMode}
           />
+        )}
+
+        {currentScreen === 'how-to-play' && (
+          <HowToPlay onBack={handleBackToMenu} />
         )}
 
         {currentScreen === 'settings' && (

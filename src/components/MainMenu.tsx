@@ -2,6 +2,7 @@ interface MainMenuProps {
   onNewGame: () => void;
   onResumeGame?: () => void;
   onSettings: () => void;
+  onHowToPlay: () => void;
   hasGameInProgress?: boolean;
 }
 
@@ -9,6 +10,7 @@ const MainMenu = ({
   onNewGame, 
   onResumeGame, 
   onSettings, 
+  onHowToPlay,
   hasGameInProgress = false 
 }: MainMenuProps) => {
   return (
@@ -60,7 +62,7 @@ const MainMenu = ({
           </button>
           
           <button 
-            onClick={() => alert('Rules coming soon!')}
+            onClick={onHowToPlay}
             className="w-full text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white font-medium py-2 px-4 rounded-lg transition-all duration-200"
           >
             How to Play
