@@ -19,7 +19,7 @@ interface Toast {
 interface ToastContextType {
   toasts: Toast[];
   addToast: (toast: Omit<Toast, 'id'>) => void;
-  addConfirmDialog: (toast: Omit<Toast, 'id'>) => void;
+  addConfirmDialog: (toast: Omit<Toast, 'id' | 'type'>) => void;
   removeToast: (id: string) => void;
 }
 
@@ -56,17 +56,17 @@ export const ToastProvider: React.FC<{ children: React.ReactNode; position?: Toa
     }
   }, []);
 
-  const addConfirmDialog = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    const newToast: Toast = { 
-      ...toast, 
-      id, 
-      type: 'confirm',
-      confirmText: toast.confirmText || 'OK',
-      cancelText: toast.cancelText || 'Cancel'
-    };
-    setToasts((prev) => [...prev, newToast]);
-  }, []);
+    const addConfirmDialog = useCallback((toast: Omit<Toast, 'id' | 'type'>) => {
+      const id = Math.random().toString(36).substr(2, 9);
+      const newToast: Toast = { 
+        ...toast, 
+        id, 
+        type: 'confirm',
+        confirmText: toast.confirmText || 'OK',
+        cancelText: toast.cancelText || 'Cancel'
+      };
+      setToasts((prev) => [...prev, newToast]);
+    }, []);
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -108,6 +108,7 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
     setIsLeaving(true);
     setTimeout(onClose, 300);
   };
+
 
   const getIcon = () => {
     switch (toast.type) {
@@ -222,22 +223,26 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
 
         {/* Confirmation buttons */}
         {toast.type === 'confirm' && (
-          <div className="mt-4 flex gap-2 justify-end">
+          <div className="mt-4 flex gap-2 justify-end pointer-events-auto">
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 toast.onCancel?.();
                 handleClose();
               }}
-              className="px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200"
+              className="px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200 cursor-pointer z-10 relative"
             >
               {toast.cancelText || 'Cancel'}
             </button>
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 toast.onConfirm?.();
                 handleClose();
               }}
-              className="px-3 py-1.5 text-xs font-medium text-white bg-orange-500/80 hover:bg-orange-500 rounded-lg transition-all duration-200 hover:scale-105"
+              className="px-3 py-1.5 text-xs font-medium text-white bg-orange-500/80 hover:bg-orange-500 rounded-lg transition-all duration-200 hover:scale-105 cursor-pointer z-10 relative"
             >
               {toast.confirmText || 'OK'}
             </button>

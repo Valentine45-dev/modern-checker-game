@@ -10,19 +10,23 @@ import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '
 
 interface GameProps {
   onBackToMenu: () => void;
+  onBackToMenuAfterQuit?: () => void;
   onGameQuit?: () => void;
   gameMode: GameMode;
 }
 
-const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
+const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: GameProps) => {
+  // Try to load saved game state first to get the correct game mode
+  const savedState = loadGameState();
+  const actualGameMode = savedState?.gameMode || gameMode;
+  
   // Determine if current player is AI (moved to top for early initialization)
-  const isAIGame = gameMode !== 'pvp';
+  const isAIGame = actualGameMode !== 'pvp';
   const aiColor: PlayerColor = 'red'; // AI always plays red
 
   const [gameState, setGameState] = useState<GameState>(() => {
     // Try to load saved game state
-    const savedState = loadGameState();
-    if (savedState && savedState.gameMode === gameMode) {
+    if (savedState && savedState.gameMode === actualGameMode) {
       return savedState;
     }
     return initializeGame();
@@ -57,7 +61,7 @@ const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
     const savedState = loadGameState();
     return new Set(savedState?.piecesWithCaptures || []);
   });
-  const { addToast } = useToast();
+  const { addToast, addConfirmDialog } = useToast();
 
   // Initialize the board with pieces
   function initializeGame(): GameState {
@@ -106,7 +110,7 @@ const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
       score: { red: 0, black: 0 },
       capturedPieces: { red: [], black: [] },
       gameStatus: 'playing',
-      gameMode: 'pvp',
+      gameMode: actualGameMode,
       mustCapture: false,
       playerTimers: { red: 300, black: 300 },
       turnStartTime: Date.now(),
@@ -877,9 +881,9 @@ const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
       return;
     }
 
-    const difficulty = AI_DIFFICULTIES[gameMode];
+      const difficulty = AI_DIFFICULTIES[actualGameMode];
     if (!difficulty) {
-      console.error('AI difficulty not found for gameMode:', gameMode);
+      console.error('AI difficulty not found for gameMode:', actualGameMode);
       return;
     }
 
@@ -894,7 +898,7 @@ const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
 
     // Show thinking message
     setAiThinking(true);
-    const thinkingMsg = getAIThinkingMessage(gameMode);
+      const thinkingMsg = getAIThinkingMessage(actualGameMode);
     addToast({
       type: 'info',
       message: '🤖 AI Thinking...',
@@ -965,7 +969,7 @@ const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
             : 0;
           const becameKing = (aiMove.piece.color === 'red' && aiMove.targetPosition.row === 7) ||
                             (aiMove.piece.color === 'black' && aiMove.targetPosition.row === 0);
-          const comment = getAIMoveComment(captureCount, becameKing, gameMode);
+          const comment = getAIMoveComment(captureCount, becameKing, actualGameMode);
           
           setTimeout(() => {
             addToast({
@@ -1051,46 +1055,43 @@ const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
     });
   }
 
-  // Handle quit game
-  function handleQuit() {
-    // Show custom confirmation dialog
-    addToast({
-      type: 'confirm',
-      message: '🚪 Quit Game?',
-      description: 'This will clear all saved game data and return to the main menu. This action cannot be undone.',
-      confirmText: 'Quit',
-      cancelText: 'Cancel',
-      onConfirm: () => {
-        // Clear all localStorage data
-        clearAllGameData();
-        
-        // Notify parent component that game was quit
-        onGameQuit?.();
-        
-        // Show confirmation toast
-        addToast({
-          type: 'info',
-          message: '🚪 Game Quit',
-          description: 'All game data has been cleared. Returning to menu.',
-          duration: 3000,
-        });
-        
-        // Return to menu after a short delay
-        setTimeout(() => {
-          onBackToMenu();
-        }, 1000);
-      },
-      onCancel: () => {
-        // User cancelled, do nothing
-        addToast({
-          type: 'info',
-          message: 'Game Continued',
-          description: 'You can continue playing.',
-          duration: 2000,
-        });
-      }
-    });
-  }
+    // Handle quit game
+    function handleQuit() {
+      // Show custom confirmation dialog
+      addConfirmDialog({
+        message: '🚪 Quit Game?',
+        description: 'This will clear all saved game data and return to the main menu. This action cannot be undone.',
+        confirmText: 'Quit',
+        cancelText: 'Cancel',
+        onConfirm: () => {
+          // Clear all localStorage data
+          clearAllGameData();
+          
+          // Notify parent component that game was quit
+          onGameQuit?.();
+          
+          // Show confirmation toast
+          addToast({
+            type: 'info',
+            message: '🚪 Game Quit',
+            description: 'All game data has been cleared. Returning to menu.',
+            duration: 3000,
+          });
+          
+          // Return to menu immediately (no delay needed since localStorage is cleared)
+          onBackToMenuAfterQuit?.() || onBackToMenu();
+        },
+        onCancel: () => {
+          // User cancelled, do nothing
+          addToast({
+            type: 'info',
+            message: 'Game Continued',
+            description: 'You can continue playing.',
+            duration: 2000,
+          });
+        }
+      });
+    }
 
   return (
     <main className="flex-grow flex items-center justify-center py-4 sm:py-8 px-2 sm:px-4 lg:px-8">
@@ -1133,7 +1134,7 @@ const Game = ({ onBackToMenu, onGameQuit, gameMode }: GameProps) => {
             turnNumber={turnNumber}
             capturedPieces={gameState.score}
             timer={gameState.playerTimers || { red: 300, black: 300 }}
-            gameMode={gameMode}
+            gameMode={actualGameMode}
           />
           
           <MoveHistory moves={gameState.moveHistory} maxDisplay={5} />

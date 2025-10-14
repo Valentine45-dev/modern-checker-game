@@ -37,6 +37,12 @@ function App() {
     checkForSavedGame();
   };
 
+  // Handle back to menu after quitting (don't check for saved games)
+  const handleBackToMenuAfterQuit = () => {
+    setCurrentScreen('menu');
+    // Don't check for saved games since we just cleared them
+  };
+
   const handleNewGame = () => {
     setCurrentScreen('mode-selection');
     setHasGameInProgressState(false);
@@ -104,6 +110,7 @@ function App() {
         {currentScreen === 'game' && (
           <Game
             onBackToMenu={handleBackToMenu}
+            onBackToMenuAfterQuit={handleBackToMenuAfterQuit}
             onGameQuit={handleGameQuit}
             gameMode={selectedMode}
           />
