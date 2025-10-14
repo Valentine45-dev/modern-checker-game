@@ -1,6 +1,7 @@
 
 import { Piece as PieceType, Position } from '../types';
 import Piece from './Piece';
+import { getGameSettings } from '../utils/gameSettings';
 
 interface SquareProps {
   position: Position;
@@ -25,6 +26,8 @@ const Square = ({
   isShaking,
   hasCapture
 }: SquareProps) => {
+  const gameSettings = getGameSettings();
+  
   // Use inline styles to ensure colors show properly
   const bgColor = isLight ? '#EADCCF' : '#A98467';
   const hoverEffect = isValidMove ? 'hover:brightness-110 cursor-pointer' : piece ? 'cursor-pointer' : '';
@@ -53,7 +56,7 @@ const Square = ({
             onClick={() => onPieceClick(piece)}
           />
         )}
-        {isValidMove && !piece && (
+        {isValidMove && !piece && gameSettings.showMoveHints && (
           <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-green-500/40 border-2 border-green-400/60 animate-pulse shadow-lg" />
         )}
       </div>

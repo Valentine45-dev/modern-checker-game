@@ -1,4 +1,5 @@
 import { Piece as PieceType } from '../types';
+import { getGameSettings } from '../utils/gameSettings';
 
 interface PieceProps {
   piece: PieceType;
@@ -9,6 +10,8 @@ interface PieceProps {
 }
 
 const Piece = ({ piece, isSelected, isShaking, hasCapture, onClick }: PieceProps) => {
+  const gameSettings = getGameSettings();
+  
   const baseClasses = "w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full shadow-lg cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95";
   
   const colorClasses = piece.color === 'red' 
@@ -17,9 +20,9 @@ const Piece = ({ piece, isSelected, isShaking, hasCapture, onClick }: PieceProps
   
   const selectedClasses = isSelected ? "ring-2 sm:ring-4 ring-blue-500 ring-offset-2 ring-offset-transparent scale-110" : "";
   
-  const shakeClasses = isShaking ? "animate-shake-no" : "";
+  const shakeClasses = isShaking && gameSettings.animationsEnabled ? "animate-shake-no" : "";
   
-  const captureGlowClasses = hasCapture && !isSelected ? "animate-capture-glow" : "";
+  const captureGlowClasses = hasCapture && !isSelected && gameSettings.animationsEnabled ? "animate-capture-glow" : "";
   
   return (
     <div 

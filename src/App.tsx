@@ -4,6 +4,7 @@ import MainMenu from './components/MainMenu';
 import Game from './components/Game';
 import GameModeSelection from './components/GameModeSelection';
 import HowToPlay from './components/HowToPlay';
+import Settings from './components/Settings';
 import { ToastProvider } from './components/ToastNotification';
 import { GameMode } from './types';
 import { hasGameInProgress, getSavedGameMode, clearGameState } from './utils/gamePersistence';
@@ -127,17 +128,7 @@ function App() {
         )}
 
         {currentScreen === 'settings' && (
-          <main className="flex-grow flex items-center justify-center p-4">
-            <div className="text-center">
-              <h2 className="text-2xl text-white mb-4">Settings Coming Soon!</h2>
-              <button 
-                onClick={handleBackToMenu}
-                className="px-6 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg"
-              >
-                Back to Menu
-              </button>
-            </div>
-          </main>
+          <Settings onBack={handleBackToMenu} />
         )}
       </div>
     </ToastProvider>

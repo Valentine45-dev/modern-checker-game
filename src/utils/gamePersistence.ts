@@ -104,18 +104,21 @@ export function clearAllGameData(): void {
     // Clear the main game state
     localStorage.removeItem(GAME_STATE_KEY);
     
-    // Clear any other potential game-related data
+    // Clear any other potential game-related data (but preserve settings)
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && (key.includes('checkers') || key.includes('game'))) {
-        keysToRemove.push(key);
+        // Don't remove settings - preserve user preferences
+        if (key !== 'checkers-game-settings') {
+          keysToRemove.push(key);
+        }
       }
     }
     
     keysToRemove.forEach(key => localStorage.removeItem(key));
     
-    console.log('All game data cleared from localStorage');
+    console.log('All game data cleared from localStorage (settings preserved)');
   } catch (error) {
     console.error('Failed to clear all game data:', error);
   }

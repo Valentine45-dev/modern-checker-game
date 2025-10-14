@@ -7,6 +7,7 @@ import MoveHistory from './MoveHistory';
 import { useToast } from './ToastNotification';
 import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment, type AIMove } from '../utils/aiEngine';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
+import { getGameSettings, getAIThinkingTime, getAnimationDuration } from '../utils/gameSettings';
 
 interface GameProps {
   onBackToMenu: () => void;
@@ -16,6 +17,9 @@ interface GameProps {
 }
 
 const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: GameProps) => {
+  // Load game settings
+  const gameSettings = getGameSettings();
+  
   // Try to load saved game state first to get the correct game mode
   const savedState = loadGameState();
   const actualGameMode = savedState?.gameMode || gameMode;
@@ -826,22 +830,22 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     setPiecesWithCaptures(capturesMap);
   }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
 
-  // Auto-save game state after each move
-  useEffect(() => {
-    if (gameState.gameStatus === 'playing') {
-      saveGameState(
-        gameState,
-        turnNumber,
-        gameStartTime,
-        kingsPromoted,
-        multiJumpInProgress,
-        currentJumpPiece,
-        accumulatedCaptures,
-        aiThinking,
-        piecesWithCaptures
-      );
-    }
-  }, [gameState, turnNumber, gameStartTime, kingsPromoted, multiJumpInProgress, currentJumpPiece, accumulatedCaptures, aiThinking, piecesWithCaptures]);
+    // Auto-save game state after each move
+    useEffect(() => {
+      if (gameState.gameStatus === 'playing' && gameSettings.autoSave) {
+        saveGameState(
+          gameState,
+          turnNumber,
+          gameStartTime,
+          kingsPromoted,
+          multiJumpInProgress,
+          currentJumpPiece,
+          accumulatedCaptures,
+          aiThinking,
+          piecesWithCaptures
+        );
+      }
+    }, [gameState, turnNumber, gameStartTime, kingsPromoted, multiJumpInProgress, currentJumpPiece, accumulatedCaptures, aiThinking, piecesWithCaptures, gameSettings.autoSave]);
 
   // Timer countdown
   useEffect(() => {
@@ -882,10 +886,17 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     }
 
       const difficulty = AI_DIFFICULTIES[actualGameMode];
-    if (!difficulty) {
-      console.error('AI difficulty not found for gameMode:', actualGameMode);
-      return;
-    }
+      if (!difficulty) {
+        console.error('AI difficulty not found for gameMode:', actualGameMode);
+        return;
+      }
+
+      // Adjust AI thinking time based on settings
+      const adjustedThinkingTime = getAIThinkingTime(
+        difficulty.thinkingTime, 
+        gameSettings.aiDifficulty, 
+        gameSettings.gameSpeed
+      );
 
     console.log('🤖 AI Move Logic Triggered', {
       isAITurn,
@@ -899,12 +910,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     // Show thinking message
     setAiThinking(true);
       const thinkingMsg = getAIThinkingMessage(actualGameMode);
-    addToast({
-      type: 'info',
-      message: '🤖 AI Thinking...',
-      description: thinkingMsg,
-      duration: difficulty.thinkingTime,
-    });
+      addToast({
+        type: 'info',
+        message: '🤖 AI Thinking...',
+        description: thinkingMsg,
+        duration: adjustedThinkingTime,
+      });
 
     // Calculate and execute AI move after thinking time
     const timer = setTimeout(() => {
@@ -991,7 +1002,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         console.error('🤖 AI Error:', error);
         setAiThinking(false);
       }
-    }, difficulty.thinkingTime);
+      }, adjustedThinkingTime);
 
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1098,15 +1109,15 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-center gap-4 sm:gap-6 lg:gap-8">
         {/* Board */}
         <div className="w-full lg:flex-1 max-w-3xl">
-          <Board
-            board={gameState.board}
-            selectedPiece={gameState.selectedPiece}
-            validMoves={gameState.validMoves}
-            onSquareClick={handleSquareClick}
-            onPieceClick={handlePieceClick}
-            shakingPieceId={shakingPieceId}
-            piecesWithCaptures={piecesWithCaptures}
-          />
+            <Board
+              board={gameState.board}
+              selectedPiece={gameState.selectedPiece}
+              validMoves={gameSettings.showMoveHints ? gameState.validMoves : []}
+              onSquareClick={handleSquareClick}
+              onPieceClick={handlePieceClick}
+              shakingPieceId={shakingPieceId}
+              piecesWithCaptures={gameSettings.showCaptures ? piecesWithCaptures : new Set()}
+            />
           
           {/* Multi-jump indicator */}
           {multiJumpInProgress && (
