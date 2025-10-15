@@ -2,6 +2,7 @@
 import { Piece as PieceType, Position } from '../types';
 import Piece from './Piece';
 import { getGameSettings } from '../utils/gameSettings';
+import { BoardTheme, getSquareColor } from '../utils/visualThemes';
 
 interface SquareProps {
   position: Position;
@@ -13,6 +14,7 @@ interface SquareProps {
   onPieceClick: (piece: PieceType) => void;
   isShaking: boolean;
   hasCapture: boolean;
+  boardTheme: BoardTheme;
 }
 
 const Square = ({ 
@@ -24,12 +26,13 @@ const Square = ({
   onSquareClick,
   onPieceClick,
   isShaking,
-  hasCapture
+  hasCapture,
+  boardTheme
 }: SquareProps) => {
   const gameSettings = getGameSettings();
   
-  // Use inline styles to ensure colors show properly
-  const bgColor = isLight ? '#EADCCF' : '#A98467';
+  // Use theme-based colors
+  const bgColor = getSquareColor(boardTheme, isLight);
   const hoverEffect = isValidMove ? 'hover:brightness-110 cursor-pointer' : piece ? 'cursor-pointer' : '';
   
   const handleClick = () => {

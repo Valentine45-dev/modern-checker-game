@@ -903,7 +903,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           accumulatedCaptures,
           aiThinking,
           piecesWithCaptures
-        );
+        ).catch(error => {
+          console.warn('Failed to auto-save game:', error);
+        });
       }
     }, [gameState, turnNumber, gameStartTime, kingsPromoted, multiJumpInProgress, currentJumpPiece, accumulatedCaptures, aiThinking, piecesWithCaptures, gameSettings.autoSave]);
 

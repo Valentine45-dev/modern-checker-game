@@ -1,5 +1,7 @@
 import { Piece as PieceType, Position } from '../types';
 import Square from './Square';
+import { getGameSettings } from '../utils/gameSettings';
+import { getBoardTheme, getBoardFrameClasses, getBoardGridClasses } from '../utils/visualThemes';
 
 interface BoardProps {
   board: (PieceType | null)[][];
@@ -12,6 +14,9 @@ interface BoardProps {
 }
 
 const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, shakingPieceId, piecesWithCaptures }: BoardProps) => {
+  const gameSettings = getGameSettings();
+  const boardTheme = getBoardTheme(gameSettings);
+  
   const isValidMove = (row: number, col: number): boolean => {
     return validMoves.some(move => move.row === row && move.col === col);
   };
@@ -22,8 +27,8 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <div className="bg-gray-800 dark:bg-gray-900 p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.25)]">
-        <div className="aspect-square w-full grid grid-cols-8 grid-rows-8 gap-0 rounded-lg overflow-hidden border-4 border-gray-700 dark:border-gray-800">
+      <div className={getBoardFrameClasses(boardTheme)}>
+        <div className={getBoardGridClasses(boardTheme)}>
           {board.map((row, rowIndex) => 
             row.map((piece, colIndex) => {
               const isLight = (rowIndex + colIndex) % 2 === 0;
@@ -39,6 +44,7 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
                   onPieceClick={onPieceClick}
                   isShaking={piece !== null && piece.id === shakingPieceId}
                   hasCapture={piece !== null && piecesWithCaptures.has(piece.id)}
+                  boardTheme={boardTheme}
                 />
               );
             })

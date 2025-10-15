@@ -1,5 +1,6 @@
 import { Piece as PieceType } from '../types';
 import { getGameSettings } from '../utils/gameSettings';
+import { getPieceStyle, getPieceClasses, getKingIconClasses } from '../utils/visualThemes';
 
 interface PieceProps {
   piece: PieceType;
@@ -11,27 +12,25 @@ interface PieceProps {
 
 const Piece = ({ piece, isSelected, isShaking, hasCapture, onClick }: PieceProps) => {
   const gameSettings = getGameSettings();
+  const pieceStyle = getPieceStyle(gameSettings);
   
-  const baseClasses = "w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full shadow-lg cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95";
-  
-  const colorClasses = piece.color === 'red' 
-    ? "bg-red-600 border-2 sm:border-3 border-red-800 shadow-red-900/50" 
-    : "bg-gray-300 dark:bg-gray-600 border-2 sm:border-3 border-gray-500 dark:border-gray-700 shadow-gray-900/50";
-  
-  const selectedClasses = isSelected ? "ring-2 sm:ring-4 ring-blue-500 ring-offset-2 ring-offset-transparent scale-110" : "";
-  
-  const shakeClasses = isShaking && gameSettings.animationsEnabled ? "animate-shake-no" : "";
-  
-  const captureGlowClasses = hasCapture && !isSelected && gameSettings.animationsEnabled ? "animate-capture-glow" : "";
+  const className = getPieceClasses(
+    pieceStyle,
+    piece,
+    isSelected,
+    isShaking,
+    hasCapture,
+    gameSettings.animationsEnabled
+  );
   
   return (
     <div 
       onClick={onClick}
-      className={`${baseClasses} ${colorClasses} ${selectedClasses} ${shakeClasses} ${captureGlowClasses} flex items-center justify-center relative`}
+      className={className}
     >
       {piece.type === 'king' && (
         <svg 
-          className="w-4 h-4 sm:w-6 sm:h-6 text-yellow-400 drop-shadow-lg" 
+          className={getKingIconClasses(pieceStyle)}
           fill="currentColor" 
           viewBox="0 0 24 24"
         >

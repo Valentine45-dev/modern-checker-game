@@ -11,9 +11,12 @@ export interface SavedGameState extends GameState {
   accumulatedCaptures: any[];
   aiThinking: boolean;
   piecesWithCaptures: string[];
+  // Visual settings
+  boardTheme: string;
+  pieceStyle: string;
 }
 
-export function saveGameState(
+export async function saveGameState(
   gameState: GameState,
   turnNumber: number,
   gameStartTime: number,
@@ -23,8 +26,12 @@ export function saveGameState(
   accumulatedCaptures: any[],
   aiThinking: boolean,
   piecesWithCaptures: Set<string>
-): void {
+): Promise<void> {
   try {
+    // Get current visual settings
+    const { getGameSettings } = await import('./gameSettings');
+    const settings = getGameSettings();
+    
     const savedState: SavedGameState = {
       ...gameState,
       turnNumber,
@@ -34,7 +41,10 @@ export function saveGameState(
       currentJumpPiece,
       accumulatedCaptures,
       aiThinking,
-      piecesWithCaptures: Array.from(piecesWithCaptures)
+      piecesWithCaptures: Array.from(piecesWithCaptures),
+      // Include visual settings
+      boardTheme: settings.boardTheme,
+      pieceStyle: settings.pieceStyle
     };
 
     localStorage.setItem(GAME_STATE_KEY, JSON.stringify(savedState));
