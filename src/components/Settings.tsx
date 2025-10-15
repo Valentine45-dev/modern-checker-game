@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { GameSettings, getGameSettings, saveGameSettings, resetGameSettings } from '../utils/gameSettings';
+import { GameSettings, getGameSettings, saveGameSettings, resetGameSettings, updateSoundSettings } from '../utils/gameSettings';
+import { soundManager } from '../utils/soundManager';
 
 interface SettingsProps {
   onBack: () => void;
@@ -20,6 +21,14 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
 
   const handleSettingChange = (key: keyof GameSettings, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+    
+    // Update sound settings immediately
+    if (key === 'soundEnabled' || key === 'soundVolume') {
+      updateSoundSettings(
+        key === 'soundEnabled' ? value : settings.soundEnabled,
+        key === 'soundVolume' ? value : settings.soundVolume
+      );
+    }
   };
 
   const resetToDefaults = () => {
@@ -53,20 +62,60 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
               Audio Settings
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Sound Effects</h3>
-                  <p className="text-gray-300 text-sm">Enable sound effects for moves and captures</p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Sound Effects</h3>
+                    <p className="text-gray-300 text-sm">Enable sound effects for moves and captures</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.soundEnabled}
+                      onChange={(e) => handleSettingChange('soundEnabled', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.soundEnabled}
-                    onChange={(e) => handleSettingChange('soundEnabled', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
-                </label>
+                
+                {settings.soundEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Volume: {Math.round(settings.soundVolume * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={settings.soundVolume}
+                      onChange={(e) => handleSettingChange('soundVolume', parseFloat(e.target.value))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>0%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                )}
+                
+                {settings.soundEnabled && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        try {
+                          soundManager.playMoveSound();
+                        } catch (error) {
+                          console.warn('Failed to play test sound:', error);
+                        }
+                      }}
+                      className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-lg transition-all duration-200 text-sm"
+                    >
+                      🔊 Test Sound
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </section>

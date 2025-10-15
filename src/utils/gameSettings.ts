@@ -1,5 +1,6 @@
 export interface GameSettings {
   soundEnabled: boolean;
+  soundVolume: number;
   animationsEnabled: boolean;
   darkMode: boolean;
   boardTheme: 'classic' | 'modern' | 'marble' | 'neon';
@@ -13,6 +14,7 @@ export interface GameSettings {
 
 const DEFAULT_SETTINGS: GameSettings = {
   soundEnabled: true,
+  soundVolume: 0.5,
   animationsEnabled: true,
   darkMode: false,
   boardTheme: 'classic',
@@ -78,4 +80,16 @@ export function getAIThinkingTime(baseTime: number, difficulty: string, speed: s
 export function getAnimationDuration(baseDuration: number, speed: string): number {
   const speedMultiplier = GAME_SPEED_MULTIPLIERS[speed as keyof typeof GAME_SPEED_MULTIPLIERS] || 1.0;
   return Math.round(baseDuration * speedMultiplier);
+}
+
+// Update sound settings
+export function updateSoundSettings(enabled: boolean, volume: number): void {
+  // Use dynamic import to avoid circular dependency issues
+  import('./soundManager').then((module) => {
+    const soundManager = module.soundManager;
+    soundManager.setEnabled(enabled);
+    soundManager.setVolume(volume);
+  }).catch((error) => {
+    console.warn('Failed to update sound settings:', error);
+  });
 }

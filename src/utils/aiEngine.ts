@@ -9,7 +9,7 @@ export interface AIDifficulty {
 
 export const AI_DIFFICULTIES: Record<string, AIDifficulty> = {
   'ai-easy': {
-    depth: 2,
+    depth: 1,
     thinkingTime: 500,
     randomness: 0.3,
   },
@@ -19,9 +19,9 @@ export const AI_DIFFICULTIES: Record<string, AIDifficulty> = {
     randomness: 0.15,
   },
   'ai-hard': {
-    depth: 5,
-    thinkingTime: 1200,
-    randomness: 0.0,
+    depth: 2,
+    thinkingTime: 600,
+    randomness: 0.1,
   },
 };
 

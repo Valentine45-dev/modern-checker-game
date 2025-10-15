@@ -7,7 +7,8 @@ import MoveHistory from './MoveHistory';
 import { useToast } from './ToastNotification';
 import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment, type AIMove } from '../utils/aiEngine';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
-import { getGameSettings, getAIThinkingTime, getAnimationDuration } from '../utils/gameSettings';
+import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../utils/gameSettings';
+import { soundManager } from '../utils/soundManager';
 
 interface GameProps {
   onBackToMenu: () => void;
@@ -66,6 +67,41 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     return new Set(savedState?.piecesWithCaptures || []);
   });
   const { addToast, addConfirmDialog } = useToast();
+
+  // Helper function to safely play sounds
+  const playSound = (soundFunction: () => void) => {
+    try {
+      soundFunction();
+    } catch (error) {
+      console.warn('Failed to play sound:', error);
+    }
+  };
+
+  // Initialize sound settings
+  useEffect(() => {
+    try {
+      updateSoundSettings(gameSettings.soundEnabled, gameSettings.soundVolume);
+    } catch (error) {
+      console.warn('Failed to initialize sound settings:', error);
+    }
+  }, [gameSettings.soundEnabled, gameSettings.soundVolume]);
+
+  // Resume audio context on first user interaction
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      soundManager.resumeAudioContext();
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('keydown', handleFirstInteraction);
+    };
+    
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('keydown', handleFirstInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, []);
 
   // Initialize the board with pieces
   function initializeGame(): GameState {
@@ -468,12 +504,15 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       setShakingPieceId(piece.id);
       setTimeout(() => setShakingPieceId(null), 500); // Clear after animation
       
-      addToast({
-        type: 'warning',
-        message: 'Wrong Turn!',
-        description: `It's ${gameState.currentPlayer} player's turn.`,
-        duration: 3000,
-      });
+        addToast({
+          type: 'warning',
+          message: 'Wrong Turn!',
+          description: `It's ${gameState.currentPlayer} player's turn.`,
+          duration: 3000,
+        });
+        
+        // Play invalid move sound
+        playSound(() => soundManager.playInvalidMoveSound());
       return;
     }
     
@@ -484,12 +523,15 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       setShakingPieceId(piece.id);
       setTimeout(() => setShakingPieceId(null), 500); // Clear after animation
       
-      addToast({
-        type: 'info',
-        message: 'No Valid Moves',
-        description: 'This piece cannot move. Select another piece.',
-        duration: 3000,
-      });
+        addToast({
+          type: 'info',
+          message: 'No Valid Moves',
+          description: 'This piece cannot move. Select another piece.',
+          duration: 3000,
+        });
+        
+        // Play invalid move sound
+        playSound(() => soundManager.playInvalidMoveSound());
       return;
     }
     
@@ -498,12 +540,15 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       setShakingPieceId(piece.id);
       setTimeout(() => setShakingPieceId(null), 500); // Clear after animation
       
-      addToast({
-        type: 'warning',
-        message: 'Must Capture!',
-        description: 'Another piece has a mandatory capture available.',
-        duration: 3000,
-      });
+        addToast({
+          type: 'warning',
+          message: 'Must Capture!',
+          description: 'Another piece has a mandatory capture available.',
+          duration: 3000,
+        });
+        
+        // Play invalid move sound
+        playSound(() => soundManager.playInvalidMoveSound());
       return;
     }
     
@@ -611,6 +656,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           description: 'Your piece reached the opposite end and became a King!',
           duration: 4000,
         });
+        
+        // Play king promotion sound
+        playSound(() => soundManager.playKingPromotionSound());
       }
     }
     
@@ -633,12 +681,15 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         score: gameState.score // Don't update score during multi-jump
       });
       
-      addToast({
-        type: 'info',
-        message: `🔄 Continue Capturing! (${currentCaptures.length} captured)`,
-        description: 'You have more captures available. Keep going!',
-        duration: 3000,
-      });
+        addToast({
+          type: 'info',
+          message: `🔄 Continue Capturing! (${currentCaptures.length} captured)`,
+          description: 'You have more captures available. Keep going!',
+          duration: 3000,
+        });
+        
+        // Play multi-jump sound
+        playSound(() => soundManager.playMultiJumpSound());
       
       return;
     }
@@ -653,16 +704,19 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       }
     }
     
-    // Show final capture notification
-    addToast({
-      type: 'success',
-      message: `⚔️ Captured ${currentCaptures.length} Piece${currentCaptures.length > 1 ? 's' : ''}!`,
-      description: currentCaptures.length > 1 ? 'Multi-jump complete!' : 'Great move!',
-      duration: 3000,
-    });
-    
-    // Capture sequence complete
-    finalizeTurn(newBoard, newScore, piece.position, newPosition, currentCaptures, becameKing);
+      // Show final capture notification
+      addToast({
+        type: 'success',
+        message: `⚔️ Captured ${currentCaptures.length} Piece${currentCaptures.length > 1 ? 's' : ''}!`,
+        description: currentCaptures.length > 1 ? 'Multi-jump complete!' : 'Great move!',
+        duration: 3000,
+      });
+      
+      // Play capture sound
+      playSound(() => soundManager.playCaptureSound());
+      
+      // Capture sequence complete
+      finalizeTurn(newBoard, newScore, piece.position, newPosition, currentCaptures, becameKing);
   }
 
   // Execute a normal move
@@ -695,13 +749,19 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           description: 'Your piece reached the opposite end and became a King!',
           duration: 4000,
         });
+        
+        // Play king promotion sound
+        playSound(() => soundManager.playKingPromotionSound());
       }
     }
     
-    newBoard[oldRow][oldCol] = null;
-    newBoard[newRow][newCol] = movedPiece;
-    
-    finalizeTurn(newBoard, gameState.score, piece.position, newPosition, [], becameKing);
+      newBoard[oldRow][oldCol] = null;
+      newBoard[newRow][newCol] = movedPiece;
+      
+      // Play move sound
+      playSound(() => soundManager.playMoveSound());
+      
+      finalizeTurn(newBoard, gameState.score, piece.position, newPosition, [], becameKing);
   }
 
   // Finalize turn and switch player
@@ -982,14 +1042,17 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
                             (aiMove.piece.color === 'black' && aiMove.targetPosition.row === 0);
           const comment = getAIMoveComment(captureCount, becameKing, actualGameMode);
           
-          setTimeout(() => {
-            addToast({
-              type: 'success',
-              message: '🤖 AI Move',
-              description: comment,
-              duration: 3000,
-            });
-          }, 300);
+            setTimeout(() => {
+              addToast({
+                type: 'success',
+                message: '🤖 AI Move',
+                description: comment,
+                duration: 3000,
+              });
+            }, 300);
+            
+            // Play AI move sound
+            playSound(() => soundManager.playAIMoveSound());
         } else {
           console.error('🤖 AI piece not found on board at position:', aiMove.piece.position);
         }
