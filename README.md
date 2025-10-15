@@ -1,6 +1,6 @@
 # Checkers Master ♟️
 
-A professional 8x8 checker game built with React, TypeScript, and Tailwind CSS featuring advanced AI opponents, smooth animations, and complete game persistence.
+A professional 8x8 checker game built with React, TypeScript, and Tailwind CSS featuring advanced AI opponents, comprehensive settings, sound effects, visual themes, and complete game persistence.
 
 ## ✨ Features
 
@@ -15,6 +15,7 @@ A professional 8x8 checker game built with React, TypeScript, and Tailwind CSS f
 - Multiple difficulty levels with strategic evaluation
 - Smart move calculation and multi-jump handling
 - Realistic thinking time with progress indicators
+- AI move comments and strategic feedback
 
 ### 🎯 International Checkers Rules
 - Complete 8x8 board implementation
@@ -23,16 +24,43 @@ A professional 8x8 checker game built with React, TypeScript, and Tailwind CSS f
 - King promotion at opposite end
 - Mandatory capture enforcement
 
-### 🎨 Visual Excellence
+### 🎨 Visual Excellence & Themes
+- **4 Board Themes**: Classic Wood, Modern Glass, Marble, Neon
+- **4 Piece Styles**: Standard, Minimal, Detailed, Retro
 - **Shake Animation** - Pieces shake when invalid moves are attempted
 - **Capture Glow** - Golden pulsing glow around pieces with mandatory captures
 - **Smooth Transitions** - Hover effects and piece animations
 - **Toast Notifications** - Real-time feedback for all game events
 - **Glassmorphism UI** - Modern design with backdrop blur effects
 
+### 🔊 Sound Effects System
+- **Web Audio API** - High-quality synthesized sounds
+- **Game Event Sounds** - Moves, captures, king promotion, invalid moves
+- **AI Move Sounds** - Distinct audio feedback for AI actions
+- **Multi-Jump Sounds** - Special audio for capture sequences
+- **Volume Control** - Adjustable sound levels (0-100%)
+- **Enable/Disable** - Toggle sound effects on/off
+- **Test Sound** - Preview audio in settings
+
+### ⚙️ Comprehensive Settings
+- **Audio Settings** - Sound effects toggle and volume control
+- **Visual Settings** - Board themes and piece styles
+- **Gameplay Settings** - Auto-save, AI difficulty, game speed
+- **UI Settings** - Move hints and capture indicators
+- **Data Management** - Reset settings and clear all data
+- **Real-time Updates** - Settings apply immediately
+
+### 📚 How to Play Guide
+- **Complete Rules** - Detailed game instructions
+- **Visual Indicators** - Understanding UI feedback
+- **Pro Tips** - Strategic advice for players
+- **Game Controls** - How to interact with the game
+- **Advanced Features** - Multi-jump and flying kings explained
+
 ### 💾 Complete Game Persistence
 - **Auto-Save** - Every move automatically saved to localStorage
 - **Resume Game** - Continue exactly where you left off
+- **Visual Settings Persistence** - Board themes and piece styles saved
 - **Smart Detection** - Automatically detects saved games on app load
 - **Cross-Session** - Works across browser tabs and sessions
 - **Mode Validation** - Ensures saved games match current mode
@@ -50,6 +78,7 @@ A professional 8x8 checker game built with React, TypeScript, and Tailwind CSS f
 - Comprehensive error handling
 - Accessibility-friendly interface
 - Dark theme with subtle patterns
+- Custom confirmation dialogs
 
 ## 🚀 Getting Started
 
@@ -93,6 +122,9 @@ npm run type-check   # Run TypeScript checks
 - **Tailwind CSS** - Utility-first styling framework
 - **Vite** - Lightning-fast build tool
 - **ESLint** - Code quality and consistency
+- **Web Audio API** - High-quality sound synthesis
+- **localStorage** - Browser-based data persistence
+- **CSS Animations** - Smooth visual effects and transitions
 
 ## 📁 Project Architecture
 
@@ -100,18 +132,23 @@ npm run type-check   # Run TypeScript checks
 src/
 ├── components/           # React components
 │   ├── Game.tsx         # Main game orchestrator
-│   ├── Board.tsx        # 8x8 checkerboard
+│   ├── Board.tsx        # 8x8 checkerboard with themes
 │   ├── Square.tsx       # Individual board squares
-│   ├── Piece.tsx        # Checker pieces with animations
+│   ├── Piece.tsx        # Checker pieces with animations & styles
 │   ├── GameInfo.tsx     # Player stats and timers
 │   ├── Controls.tsx     # Game control buttons
 │   ├── MoveHistory.tsx  # Move history display
 │   ├── MainMenu.tsx     # Main menu with resume
 │   ├── GameModeSelection.tsx # Mode selection screen
-│   └── ToastNotification.tsx # Notification system
+│   ├── ToastNotification.tsx # Notification system
+│   ├── HowToPlay.tsx    # Game rules and instructions
+│   └── Settings.tsx     # Comprehensive settings page
 ├── utils/               # Utility functions
 │   ├── aiEngine.ts      # AI logic and algorithms
-│   └── gamePersistence.ts # Save/load functionality
+│   ├── gamePersistence.ts # Save/load functionality
+│   ├── gameSettings.ts  # Settings management
+│   ├── soundManager.ts  # Web Audio API sound system
+│   └── visualThemes.ts  # Board themes and piece styles
 ├── types/               # TypeScript definitions
 │   └── index.ts         # Game state types
 ├── App.tsx             # Main app component
@@ -125,8 +162,9 @@ src/
 - Manages complete game state
 - Handles move validation and execution
 - Integrates AI opponent logic
-- Auto-saves game progress
-- Provides visual feedback
+- Auto-saves game progress with visual settings
+- Provides visual feedback and animations
+- Integrates sound effects and visual themes
 
 ### AI Engine
 - **Minimax Algorithm** - Strategic move calculation
@@ -134,10 +172,33 @@ src/
 - **Heuristic Evaluation** - Board position scoring
 - **Multi-Jump Handling** - Complex capture sequences
 - **Difficulty Scaling** - Adjustable challenge levels
+- **Move Comments** - Strategic feedback for AI moves
+
+### Sound System
+- **Web Audio API** - High-quality synthesized sounds
+- **Event-Based Audio** - Sounds for all game events
+- **Volume Control** - Adjustable audio levels
+- **Audio Context Management** - Proper initialization and cleanup
+- **Cross-Browser Compatibility** - Works on all modern browsers
+
+### Visual Themes System
+- **Board Themes** - 4 distinct visual styles
+- **Piece Styles** - 4 different piece appearances
+- **Dynamic Application** - Real-time theme switching
+- **Persistence** - Themes saved with game state
+- **Responsive Design** - Themes work on all screen sizes
+
+### Settings Management
+- **Comprehensive Settings** - Audio, visual, gameplay options
+- **Real-time Updates** - Settings apply immediately
+- **Data Persistence** - Settings saved to localStorage
+- **Reset Functionality** - Restore default settings
+- **Data Management** - Clear all saved data
 
 ### Persistence System
 - **localStorage Integration** - Browser-based storage
 - **State Serialization** - Complete game state saving
+- **Visual Settings Persistence** - Board themes and piece styles
 - **Validation** - Data integrity checks
 - **Error Recovery** - Graceful failure handling
 
@@ -163,9 +224,27 @@ src/
 ## 🔧 Configuration
 
 ### AI Difficulty Settings
-- **Easy**: Depth 2, High randomness
-- **Medium**: Depth 3, Medium randomness  
-- **Hard**: Depth 4, Low randomness
+- **Easy**: Depth 2, High randomness, 1-2s thinking time
+- **Medium**: Depth 3, Medium randomness, 2-3s thinking time
+- **Hard**: Depth 4, Low randomness, 3-4s thinking time
+
+### Visual Themes
+- **Classic Wood**: Traditional brown wooden board
+- **Modern Glass**: Sleek glass-like appearance
+- **Marble**: Elegant marble texture
+- **Neon**: Futuristic neon colors
+
+### Piece Styles
+- **Standard**: Classic checker appearance
+- **Minimal**: Clean, simple design
+- **Detailed**: Rich, textured pieces
+- **Retro**: Vintage-inspired look
+
+### Sound Settings
+- **Volume Control**: 0-100% adjustable
+- **Enable/Disable**: Toggle all sound effects
+- **Event Sounds**: Moves, captures, promotions, invalid moves
+- **AI Sounds**: Distinct audio for AI actions
 
 ### Game Rules
 - 8x8 International Checkers
@@ -176,10 +255,13 @@ src/
 ## 🎮 How to Play
 
 1. **Start Game** - Choose PvP or AI difficulty
-2. **Make Moves** - Click piece, then destination square
-3. **Captures** - Jump over opponent pieces (mandatory)
-4. **Kings** - Reach opposite end to promote
-5. **Win** - Capture all opponent pieces or block all moves
+2. **Customize Experience** - Access Settings for themes, sounds, and preferences
+3. **Make Moves** - Click piece, then destination square
+4. **Captures** - Jump over opponent pieces (mandatory)
+5. **Kings** - Reach opposite end to promote
+6. **Multi-Jumps** - Continue capturing in sequence
+7. **Win** - Capture all opponent pieces or block all moves
+8. **Resume** - Continue saved games from main menu
 
 ## 🚀 Deployment
 
@@ -205,5 +287,5 @@ MIT License - feel free to use this project for learning and development!
 
 ---
 
-**Built with ❤️ using React, TypeScript, and Tailwind CSS**
+**Built with ❤️ using React, TypeScript, Tailwind CSS, Web Audio API, and modern web technologies**
 
