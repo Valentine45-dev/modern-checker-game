@@ -339,6 +339,128 @@ export function findCaptureInTree(captures: PossibleMove[], targetPos: Position)
 }
 
 // ============================================
+// COMPLETE MOVES
+// ============================================
+
+/**
+ * A whole turn, not a single hop.
+ *
+ * `getPossibleCaptures` returns a tree whose top-level nodes are only the FIRST
+ * jump of a sequence. Treating those nodes as "a move" — which the AI used to do
+ * — means a triple capture is scored, and simulated, as though it wins one
+ * piece, leaving the other two enemy pieces standing on an illegal board. Every
+ * extra ply of search compounded that error, which is why searching deeper made
+ * the AI play worse.
+ *
+ * A FullMove is a terminal leaf: the complete hop path and every piece it takes.
+ */
+export interface FullMove {
+  pieceId: string;
+  from: Position;
+  /** Final landing square. */
+  to: Position;
+  /** Landing square of each hop, in order. Length 1 for a normal move. */
+  path: Position[];
+  /** Every piece captured across the whole sequence. */
+  captured: Piece[];
+  isCapture: boolean;
+  /** True if this move ends with a man reaching its promotion row. */
+  promotes: boolean;
+}
+
+/**
+ * Walk a capture tree to its terminal leaves.
+ *
+ * A sequence stops early when a man lands on its promotion row, because that is
+ * what the board does (Game.tsx ends the turn on promotion rather than letting a
+ * fresh king keep jumping). The search has to model the same game the board
+ * plays.
+ */
+function collectCaptureSequences(
+  node: PossibleMove,
+  piece: Piece,
+  pathSoFar: Position[],
+  capturedSoFar: Piece[],
+  out: FullMove[]
+): void {
+  const path = [...pathSoFar, node.position];
+  const captured = [...capturedSoFar, ...node.capturedPieces];
+
+  const promotesHere = piece.type !== 'king' && node.position.row === promotionRow(piece.color);
+  const canContinue = !promotesHere && node.continuations && node.continuations.length > 0;
+
+  if (canContinue) {
+    for (const child of node.continuations!) {
+      collectCaptureSequences(child, piece, path, captured, out);
+    }
+    return;
+  }
+
+  out.push({
+    pieceId: piece.id,
+    from: piece.position,
+    to: node.position,
+    path,
+    captured,
+    isCapture: true,
+    promotes: promotesHere,
+  });
+}
+
+/**
+ * Every legal complete turn for a player, with mandatory capture applied.
+ * This is the primitive the search should use.
+ */
+export function enumerateMoves(board: BoardType, player: PlayerColor): FullMove[] {
+  const moves: FullMove[] = [];
+  const { captures, normalMoves } = getAllValidMovesForPlayer(board, player);
+
+  for (const [pieceId, trees] of captures) {
+    const piece = findPieceById(board, pieceId);
+    if (!piece) continue;
+    for (const tree of trees) {
+      collectCaptureSequences(tree, piece, [], [], moves);
+    }
+  }
+
+  if (captures.size === 0) {
+    for (const [pieceId, positions] of normalMoves) {
+      const piece = findPieceById(board, pieceId);
+      if (!piece) continue;
+      for (const to of positions) {
+        moves.push({
+          pieceId,
+          from: piece.position,
+          to,
+          path: [to],
+          captured: [],
+          isCapture: false,
+          promotes: piece.type !== 'king' && to.row === promotionRow(piece.color),
+        });
+      }
+    }
+  }
+
+  return moves;
+}
+
+/** Apply a complete move: remove everything it captured, move, promote. */
+export function applyMove(board: BoardType, move: FullMove): BoardType {
+  const piece = board[move.from.row][move.from.col];
+  if (!piece) return board.map(row => [...row]);
+  return simulateMove(board, piece, move.to, move.captured);
+}
+
+/** How many pieces the opponent can win in a single reply. Used by tests. */
+export function bestCaptureCountFor(board: BoardType, player: PlayerColor): number {
+  let worst = 0;
+  for (const move of enumerateMoves(board, player)) {
+    if (move.captured.length > worst) worst = move.captured.length;
+  }
+  return worst;
+}
+
+// ============================================
 // APPLYING A MOVE
 // ============================================
 

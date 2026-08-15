@@ -2,10 +2,11 @@ import { Piece, Position, PlayerColor, Board as BoardType, PossibleMove } from '
 import {
   getAllValidMovesForPlayer,
   getPossibleCaptures,
+  enumerateMoves,
+  applyMove,
   findPieceById,
-  simulateMove,
-  positionsEqual,
   opponentOf,
+  type FullMove,
 } from './rules';
 
 // AI difficulty settings
@@ -37,9 +38,11 @@ export const AI_DIFFICULTIES: Record<string, AIDifficulty> = {
 export interface AIMove {
   piece: Piece;
   targetPosition: Position;
-  captureMove?: PossibleMove;
+  /** The complete chosen turn, including every hop and every capture. */
+  move: FullMove;
   score: number;
   depth: number;
+  elapsedMs?: number;
 }
 
 // Board evaluation weights
@@ -170,6 +173,21 @@ function captureContainsPiece(capture: PossibleMove, targetPiece: Piece): boolea
 // MINIMAX WITH ALPHA-BETA PRUNING
 // ============================================
 
+/** Mate-ish score. Kept well above any evaluation the heuristic can produce. */
+const WIN_SCORE = 100000;
+
+/**
+ * Search moves in a sensible order so alpha-beta actually prunes: longest
+ * capture chains first, then promotions, then the rest.
+ */
+function orderMoves(moves: FullMove[]): FullMove[] {
+  return [...moves].sort((a, b) => {
+    if (b.captured.length !== a.captured.length) return b.captured.length - a.captured.length;
+    if (a.promotes !== b.promotes) return a.promotes ? -1 : 1;
+    return 0;
+  });
+}
+
 function minimax(
   board: BoardType,
   depth: number,
@@ -178,126 +196,43 @@ function minimax(
   maximizingPlayer: boolean,
   aiColor: PlayerColor
 ): number {
-  // Terminal conditions
+  const currentPlayer = maximizingPlayer ? aiColor : opponentOf(aiColor);
+  const moves = enumerateMoves(board, currentPlayer);
+
+  // Side to move has nothing legal: they have lost. Prefer quicker wins and
+  // slower losses by folding remaining depth into the score.
+  if (moves.length === 0) {
+    return maximizingPlayer ? -(WIN_SCORE + depth) : WIN_SCORE + depth;
+  }
+
   if (depth === 0) {
     return evaluateBoard(board, aiColor);
   }
-  
-  const currentPlayer = maximizingPlayer ? aiColor : opponentOf(aiColor);
-  const allMoves = getAllValidMovesForPlayer(board, currentPlayer);
-  
-  // Check for game over (no moves available)
-  if (allMoves.captures.size === 0 && allMoves.normalMoves.size === 0) {
-    return maximizingPlayer ? -10000 : 10000;
-  }
-  
+
+  const ordered = orderMoves(moves);
+
   if (maximizingPlayer) {
     let maxEval = -Infinity;
-    
-    // Try capture moves first (better move ordering)
-    for (const [pieceId, captures] of allMoves.captures) {
-      const piece = findPieceById(board, pieceId);
-      if (!piece) continue;
-      
-      for (const capture of captures) {
-        const allCaptured = collectAllCapturedInMove(capture, capture.position);
-        const newBoard = simulateMove(board, piece, capture.position, allCaptured);
-        
-        const evaluation = minimax(newBoard, depth - 1, alpha, beta, false, aiColor);
-        maxEval = Math.max(maxEval, evaluation);
-        alpha = Math.max(alpha, evaluation);
-        
-        if (beta <= alpha) break;
-      }
+    for (const move of ordered) {
+      const evaluation = minimax(applyMove(board, move), depth - 1, alpha, beta, false, aiColor);
+      if (evaluation > maxEval) maxEval = evaluation;
+      if (evaluation > alpha) alpha = evaluation;
+      // One flat loop, so this cutoff actually skips the remaining siblings.
+      // The old shape looped per piece and broke only the inner loop, which
+      // meant a cutoff still searched every other piece.
+      if (beta <= alpha) break;
     }
-    
-    // Try normal moves if no captures
-    if (allMoves.captures.size === 0) {
-      for (const [pieceId, moves] of allMoves.normalMoves) {
-        const piece = findPieceById(board, pieceId);
-        if (!piece) continue;
-        
-        for (const move of moves) {
-          const newBoard = simulateMove(board, piece, move, []);
-          
-          const evaluation = minimax(newBoard, depth - 1, alpha, beta, false, aiColor);
-          maxEval = Math.max(maxEval, evaluation);
-          alpha = Math.max(alpha, evaluation);
-          
-          if (beta <= alpha) break;
-        }
-      }
-    }
-    
     return maxEval;
-  } else {
-    let minEval = Infinity;
-    
-    for (const [pieceId, captures] of allMoves.captures) {
-      const piece = findPieceById(board, pieceId);
-      if (!piece) continue;
-      
-      for (const capture of captures) {
-        const allCaptured = collectAllCapturedInMove(capture, capture.position);
-        const newBoard = simulateMove(board, piece, capture.position, allCaptured);
-        
-        const evaluation = minimax(newBoard, depth - 1, alpha, beta, true, aiColor);
-        minEval = Math.min(minEval, evaluation);
-        beta = Math.min(beta, evaluation);
-        
-        if (beta <= alpha) break;
-      }
-    }
-    
-    if (allMoves.captures.size === 0) {
-      for (const [pieceId, moves] of allMoves.normalMoves) {
-        const piece = findPieceById(board, pieceId);
-        if (!piece) continue;
-        
-        for (const move of moves) {
-          const newBoard = simulateMove(board, piece, move, []);
-          
-          const evaluation = minimax(newBoard, depth - 1, alpha, beta, true, aiColor);
-          minEval = Math.min(minEval, evaluation);
-          beta = Math.min(beta, evaluation);
-          
-          if (beta <= alpha) break;
-        }
-      }
-    }
-    
-    return minEval;
   }
-}
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-function collectAllCapturedInMove(captureMove: PossibleMove, targetPos: Position): Piece[] {
-  const allCaptured: Piece[] = [];
-  
-  function traverse(move: PossibleMove, target: Position): boolean {
-    allCaptured.push(...move.capturedPieces);
-    
-    if (positionsEqual(move.position, target)) {
-      return true;
-    }
-    
-    if (move.continuations) {
-      for (const cont of move.continuations) {
-        if (traverse(cont, target)) {
-          return true;
-        }
-      }
-    }
-    
-    allCaptured.splice(allCaptured.length - move.capturedPieces.length, move.capturedPieces.length);
-    return false;
+  let minEval = Infinity;
+  for (const move of ordered) {
+    const evaluation = minimax(applyMove(board, move), depth - 1, alpha, beta, true, aiColor);
+    if (evaluation < minEval) minEval = evaluation;
+    if (evaluation < beta) beta = evaluation;
+    if (beta <= alpha) break;
   }
-  
-  traverse(captureMove, targetPos);
-  return allCaptured;
+  return minEval;
 }
 
 // ============================================
@@ -309,79 +244,49 @@ export function calculateAIMove(
   aiColor: PlayerColor,
   difficulty: AIDifficulty
 ): AIMove | null {
-  console.log(`[AI] Starting calculation for ${aiColor} at depth ${difficulty.depth}`);
   const startTime = Date.now();
-  
-  const allMoves = getAllValidMovesForPlayer(board, aiColor);
-  
-  // No moves available
-  if (allMoves.captures.size === 0 && allMoves.normalMoves.size === 0) {
-    console.log('[AI] No moves available');
-    return null;
-  }
-  
+
+  const moves = enumerateMoves(board, aiColor);
+  if (moves.length === 0) return null;
+
   let bestMove: AIMove | null = null;
   let bestScore = -Infinity;
-  
-  // Evaluate all possible moves
-  const movesToEvaluate: Array<{ piece: Piece; position: Position; capture?: PossibleMove }> = [];
-  
-  // Add capture moves
-  for (const [pieceId, captures] of allMoves.captures) {
-    const piece = findPieceById(board, pieceId);
-    if (!piece) continue;
-    
-    for (const capture of captures) {
-      movesToEvaluate.push({ piece, position: capture.position, capture });
-    }
-  }
-  
-  // Add normal moves (only if no captures)
-  if (allMoves.captures.size === 0) {
-    for (const [pieceId, moves] of allMoves.normalMoves) {
-      const piece = findPieceById(board, pieceId);
-      if (!piece) continue;
-      
-      for (const move of moves) {
-        movesToEvaluate.push({ piece, position: move });
-      }
-    }
-  }
-  
-  console.log(`[AI] Evaluating ${movesToEvaluate.length} possible moves`);
-  
-  // Evaluate each move
-  let moveCount = 0;
-  for (const { piece, position, capture } of movesToEvaluate) {
-    moveCount++;
-    if (moveCount % 5 === 0) {
-      console.log(`[AI] Progress: ${moveCount}/${movesToEvaluate.length} moves evaluated`);
-    }
-    const capturedPieces = capture ? collectAllCapturedInMove(capture, position) : [];
-    const newBoard = simulateMove(board, piece, position, capturedPieces);
-    
-    // Use minimax to evaluate the move
-    const score = minimax(newBoard, difficulty.depth - 1, -Infinity, Infinity, false, aiColor);
-    
-    // Add randomness for lower difficulties
+  let alpha = -Infinity;
+
+  for (const move of orderMoves(moves)) {
+    const score = minimax(
+      applyMove(board, move),
+      difficulty.depth - 1,
+      alpha,
+      Infinity,
+      false,
+      aiColor
+    );
+
+    // Randomness is what makes the easier tiers make mistakes. It is applied
+    // only at the root so it perturbs the choice, never the search itself.
     const randomFactor = (Math.random() - 0.5) * difficulty.randomness * 100;
     const adjustedScore = score + randomFactor;
-    
+
     if (adjustedScore > bestScore) {
       bestScore = adjustedScore;
+      // Carry the whole sequence, so the UI replays the exact chain the search
+      // chose rather than re-deciding hop by hop.
       bestMove = {
-        piece,
-        targetPosition: position,
-        captureMove: capture,
+        piece: findPieceById(board, move.pieceId) ?? board[move.from.row][move.from.col]!,
+        targetPosition: move.to,
+        move,
         score: adjustedScore,
         depth: difficulty.depth,
       };
     }
+    // Root alpha still tightens the window for later siblings.
+    if (score > alpha) alpha = score;
   }
-  
-  const elapsed = Date.now() - startTime;
-  console.log(`[AI] Calculation complete in ${elapsed}ms. Best score: ${bestScore}`);
-  
+
+  if (bestMove) {
+    bestMove.elapsedMs = Date.now() - startTime;
+  }
   return bestMove;
 }
 

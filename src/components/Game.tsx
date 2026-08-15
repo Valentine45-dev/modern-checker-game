@@ -7,7 +7,7 @@ import Controls from './Controls';
 import MoveHistory from './MoveHistory';
 import { ToastOutlet } from './ToastNotification';
 import { useToast } from './toastContext';
-import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment, type AIMove } from '../utils/aiEngine';
+import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment } from '../utils/aiEngine';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
 import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
@@ -75,6 +75,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   });
   const [aiThinking, setAiThinking] = useState(false);
   const [aiThinkingMessage, setAiThinkingMessage] = useState('');
+  // Remaining hops of the capture chain the search picked, so the UI replays
+  // exactly that sequence instead of re-choosing at each jump.
+  const [aiPlannedPath, setAiPlannedPath] = useState<Position[]>([]);
   const [shakingPieceId, setShakingPieceId] = useState<string | null>(null);
   const [piecesWithCaptures, setPiecesWithCaptures] = useState<Set<string>>(() => {
     const savedState = loadGameState();
@@ -176,7 +179,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     if (aiThinking) {
       addToast({
         type: 'info',
-        message: '<Bot className="inline-block w-5 h-5 mr-2 align-text-bottom" aria-hidden="true" />AI is thinking...',
+        message: 'AI is thinking...',
         description: 'Please wait for the AI to make its move.',
         duration: 2000,
       });
@@ -656,86 +659,84 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     const timer = setTimeout(() => {
       try {
         console.log('🤖 setTimeout executing...');
-        let aiMove: AIMove | null = null;
 
-        // Handle multi-jump continuation
+        // ----- continuing a chain the search already chose -----
         if (isAIMultiJump && currentJumpPiece) {
-          console.log('🤖 AI continuing multi-jump');
-          
-          // Get valid continuation moves for the jumping piece
+          const nextHop = aiPlannedPath[0];
           const { captures } = getValidMovesForPiece(currentJumpPiece);
-          
-          if (captures.length > 0) {
-            // Choose the best continuation (for now, just pick the first one)
-            // In a more advanced version, evaluate each continuation
-            const bestCapture = captures[0];
-            
-            aiMove = {
-              piece: currentJumpPiece,
-              targetPosition: bestCapture.position,
-              captureMove: bestCapture,
-              score: 0,
-              depth: 0
-            };
-            
-            console.log('🤖 AI chose multi-jump continuation:', aiMove);
+
+          // Follow the planned hop. Previously this took captures[0] with no
+          // evaluation at all, so the AI could pick a 1-piece branch when a
+          // 3-piece one was available.
+          const planned = nextHop
+            ? findCaptureInTree(captures, nextHop)
+            : null;
+
+          if (planned) {
+            setAiPlannedPath(prev => prev.slice(1));
+            executeCapture(currentJumpPiece, planned.position, planned);
+            playSound(() => soundManager.playAIMoveSound());
           } else {
-            console.error('🤖 AI multi-jump has no continuations available!');
+            console.error('🤖 AI multi-jump lost its planned path');
             setMultiJumpInProgress(false);
             setCurrentJumpPiece(null);
+            setAiPlannedPath([]);
+          }
+          setAiThinking(false);
+          return;
+        }
+
+        // ----- a fresh turn -----
+        console.log('🤖 AI calculating normal move, difficulty:', difficulty);
+        const aiMove = calculateAIMove(gameState.board, aiColor, difficulty);
+        console.log('🤖 AI calculated move:', aiMove);
+
+        if (!aiMove) {
+          console.error('🤖 AI could not calculate a move!');
+          setAiThinking(false);
+          return;
+        }
+
+        const piece = gameState.board[aiMove.move.from.row][aiMove.move.from.col];
+        if (!piece) {
+          console.error('🤖 AI piece not found on board at position:', aiMove.move.from);
+          setAiThinking(false);
+          return;
+        }
+
+        const [firstHop, ...restOfPath] = aiMove.move.path;
+        setAiPlannedPath(restOfPath);
+
+        if (aiMove.move.isCapture) {
+          const { captures } = getValidMovesForPiece(piece);
+          const node = findCaptureInTree(captures, firstHop);
+          if (node) {
+            executeCapture(piece, node.position, node);
+          } else {
+            console.error('🤖 AI planned a capture the board does not offer', firstHop);
             setAiThinking(false);
             return;
           }
         } else {
-          // Normal AI move calculation
-          console.log('🤖 AI calculating normal move, board:', gameState.board);
-          console.log('🤖 AI color:', aiColor);
-          console.log('🤖 Difficulty:', difficulty);
-          
-          aiMove = calculateAIMove(gameState.board, aiColor, difficulty);
-          console.log('🤖 AI calculated move:', aiMove);
+          executeNormalMove(piece, firstHop);
         }
-      
-      if (aiMove) {
-        // Find the actual piece on the board
-        const piece = gameState.board[aiMove.piece.position.row][aiMove.piece.position.col];
-        if (piece) {
-          console.log('🤖 AI executing move from', aiMove.piece.position, 'to', aiMove.targetPosition);
-          
-          // Execute the move
-          if (aiMove.captureMove) {
-            executeCapture(piece, aiMove.targetPosition, aiMove.captureMove);
-          } else {
-            executeNormalMove(piece, aiMove.targetPosition);
-          }
 
-          // Show AI move comment
-          const captureCount = aiMove.captureMove 
-            ? aiMove.captureMove.capturedPieces.length 
-            : 0;
-          const becameKing = (aiMove.piece.color === 'red' && aiMove.targetPosition.row === 7) ||
-                            (aiMove.piece.color === 'black' && aiMove.targetPosition.row === 0);
-          const comment = getAIMoveComment(captureCount, becameKing, actualGameMode);
-          
-            setTimeout(() => {
-              addToast({
-                type: 'success',
-                message: 'AI Move',
-                description: comment,
-                duration: 3000,
-              });
-            }, 300);
-            
-            // Play AI move sound
-            playSound(() => soundManager.playAIMoveSound());
-        } else {
-          console.error('🤖 AI piece not found on board at position:', aiMove.piece.position);
-        }
-      } else {
-        console.error('🤖 AI could not calculate a move!');
-      }
-      
-      setAiThinking(false);
+        const comment = getAIMoveComment(
+          aiMove.move.captured.length,
+          aiMove.move.promotes,
+          actualGameMode
+        );
+        setTimeout(() => {
+          addToast({
+            type: 'success',
+            message: 'AI Move',
+            description: comment,
+            duration: 3000,
+          });
+        }, 300);
+
+        playSound(() => soundManager.playAIMoveSound());
+        setAiThinking(false);
       } catch (error) {
         console.error('🤖 AI Error:', error);
         setAiThinking(false);
