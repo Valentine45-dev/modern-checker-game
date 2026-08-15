@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { Trophy, Crown, Repeat, Bot, Sparkles, RotateCcw, ArrowLeft } from 'lucide-react';
 import { GameState, Piece, Position, PlayerColor, Move, Board as BoardType, GameMode, PossibleMove } from '../types';
 import Board from './Board';
 import GameInfo from './GameInfo';
 import Controls from './Controls';
 import MoveHistory from './MoveHistory';
-import { useToast } from './ToastNotification';
+import { ToastOutlet } from './ToastNotification';
+import { useToast } from './toastContext';
 import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment, type AIMove } from '../utils/aiEngine';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
 import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../utils/gameSettings';
@@ -61,6 +63,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     return savedState?.accumulatedCaptures || [];
   });
   const [aiThinking, setAiThinking] = useState(false);
+  const [aiThinkingMessage, setAiThinkingMessage] = useState('');
   const [shakingPieceId, setShakingPieceId] = useState<string | null>(null);
   const [piecesWithCaptures, setPiecesWithCaptures] = useState<Set<string>>(() => {
     const savedState = loadGameState();
@@ -180,7 +183,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     const [dRow, dCol] = direction;
     let { row, col } = piece.position;
     
-    while (true) {
+    for (;;) {
       row += dRow;
       col += dCol;
       
@@ -206,7 +209,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     let capturePos: Position | null = null;
     
     // Fly until we hit a piece
-    while (true) {
+    for (;;) {
       row += dRow;
       col += dCol;
       
@@ -230,7 +233,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       row = capturePos.row;
       col = capturePos.col;
       
-      while (true) {
+      for (;;) {
         row += dRow;
         col += dCol;
         
@@ -476,7 +479,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     if (aiThinking) {
       addToast({
         type: 'info',
-        message: '🤖 AI is thinking...',
+        message: '<Bot className="inline-block w-5 h-5 mr-2 align-text-bottom" aria-hidden="true" />AI is thinking...',
         description: 'Please wait for the AI to make its move.',
         duration: 2000,
       });
@@ -557,7 +560,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     if (mustCapture && captures.length > 0) {
       addToast({
         type: 'info',
-        message: '⚔️ Capture Available!',
+        message: 'Capture Available!',
         description: 'You must capture the opponent\'s piece.',
         duration: 3000,
       });
@@ -632,39 +635,38 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       newBoard[captured.position.row][captured.position.col] = null;
     }
     
-    // Move the piece
-    let movedPiece: Piece = {
-      ...piece,
-      position: newPosition
-    };
-    
     // Check for king promotion
-    let becameKing = false;
-    if ((movedPiece.color === 'red' && newRow === 7) || 
-        (movedPiece.color === 'black' && newRow === 0)) {
-      if (movedPiece.type !== 'king') {
-        movedPiece.type = 'king';
-        becameKing = true;
-        setKingsPromoted(prev => ({
-          ...prev,
-          [movedPiece.color]: prev[movedPiece.color] + 1
-        }));
-        
-        addToast({
-          type: 'success',
-          message: '👑 King Promoted!',
-          description: 'Your piece reached the opposite end and became a King!',
-          duration: 4000,
-        });
-        
-        // Play king promotion sound
-        playSound(() => soundManager.playKingPromotionSound());
-      }
+    const reachedBackRank =
+      (piece.color === 'red' && newRow === 7) || (piece.color === 'black' && newRow === 0);
+    const becameKing = reachedBackRank && piece.type !== 'king';
+
+    // Move the piece (promoting it in the same step, so the object is never mutated)
+    const movedPiece: Piece = {
+      ...piece,
+      position: newPosition,
+      type: becameKing ? 'king' : piece.type
+    };
+
+    if (becameKing) {
+      setKingsPromoted(prev => ({
+        ...prev,
+        [movedPiece.color]: prev[movedPiece.color] + 1
+      }));
+
+      addToast({
+        type: 'success',
+        message: 'King Promoted!',
+        description: 'Your piece reached the opposite end and became a King!',
+        duration: 4000,
+      });
+
+      // Play king promotion sound
+      playSound(() => soundManager.playKingPromotionSound());
     }
-    
+
     newBoard[oldRow][oldCol] = null;
     newBoard[newRow][newCol] = movedPiece;
-    
+
     // Check if there are continuation captures
     if (captureMove.continuations && captureMove.continuations.length > 0 && !becameKing) {
       // Multi-jump in progress - DON'T update score yet, just accumulate
@@ -683,7 +685,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       
         addToast({
           type: 'info',
-          message: `🔄 Continue Capturing! (${currentCaptures.length} captured)`,
+          message: `Continue Capturing! (${currentCaptures.length} captured)`,
           description: 'You have more captures available. Keep going!',
           duration: 3000,
         });
@@ -707,7 +709,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       // Show final capture notification
       addToast({
         type: 'success',
-        message: `⚔️ Captured ${currentCaptures.length} Piece${currentCaptures.length > 1 ? 's' : ''}!`,
+        message: `Captured ${currentCaptures.length} Piece${currentCaptures.length > 1 ? 's' : ''}!`,
         description: currentCaptures.length > 1 ? 'Multi-jump complete!' : 'Great move!',
         duration: 3000,
       });
@@ -745,7 +747,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         
         addToast({
           type: 'success',
-          message: '👑 King Promoted!',
+          message: 'King Promoted!',
           description: 'Your piece reached the opposite end and became a King!',
           duration: 4000,
         });
@@ -793,21 +795,10 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     // Switch player
     const nextPlayer: PlayerColor = gameState.currentPlayer === 'red' ? 'black' : 'red';
     
-    // Show turn change notification
-    if (!winner && capturedPieces.length === 0) {
-      setTimeout(() => {
-        const playerName = nextPlayer === 'red' 
-          ? (isAIGame ? '🤖 AI' : 'Red Player') 
-          : 'Black Player';
-        addToast({
-          type: 'info',
-          message: `${playerName}'s Turn`,
-          description: 'Make your move!',
-          duration: 2000,
-        });
-      }, 500);
-    }
-    
+    // No turn-change toast: the "Current Player" card in the sidebar already
+    // shows whose turn it is, and firing a toast for every single move was the
+    // main source of notification spam over the board.
+
     // Clear saved game state if game is finished
     if (winner) {
       clearGameState();
@@ -859,11 +850,11 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     
     if (!opponentHasPieces || !opponentHasMoves) {
       const winnerName = lastPlayer === 'red' 
-        ? (isAIGame ? '🤖 AI' : 'Red player') 
+        ? (isAIGame ? 'AI' : 'Red player') 
         : 'Black player';
       addToast({
         type: 'success',
-        message: '🎉 Game Over!',
+        message: 'Game Over!',
         description: `${winnerName} wins!`,
         duration: 5000,
       });
@@ -888,6 +879,10 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     }
     
     setPiecesWithCaptures(capturesMap);
+    // getAllValidMovesForPlayer is re-created on every render, so listing it here
+    // would re-run this effect (and setState) on every render. The real fix is to
+    // move the rules out of this component into a stable module.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
 
     // Auto-save game state after each move
@@ -924,6 +919,10 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     }, 1000);
 
     return () => clearInterval(interval);
+    // The tick reads the timers through the setState updater, so it does not need
+    // gameState.playerTimers as a dependency (adding it would restart the interval
+    // every second).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.currentPlayer, gameState.gameStatus]);
 
   // AI Move Logic
@@ -960,7 +959,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         gameSettings.gameSpeed
       );
 
-    console.log('🤖 AI Move Logic Triggered', {
+    console.log('AI Move Logic Triggered', {
       isAITurn,
       isAIMultiJump,
       currentPlayer: gameState.currentPlayer,
@@ -969,15 +968,11 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       currentJumpPiece: currentJumpPiece?.id
     });
 
-    // Show thinking message
+    // Show thinking state. No toast here on purpose — the board already renders
+    // an "AI is thinking..." banner, and a toast saying the same thing was just
+    // extra noise stacking up over the game.
     setAiThinking(true);
-      const thinkingMsg = getAIThinkingMessage(actualGameMode);
-      addToast({
-        type: 'info',
-        message: '🤖 AI Thinking...',
-        description: thinkingMsg,
-        duration: adjustedThinkingTime,
-      });
+    setAiThinkingMessage(getAIThinkingMessage(actualGameMode));
 
     // Calculate and execute AI move after thinking time
     const timer = setTimeout(() => {
@@ -1047,7 +1042,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             setTimeout(() => {
               addToast({
                 type: 'success',
-                message: '🤖 AI Move',
+                message: 'AI Move',
                 description: comment,
                 duration: 3000,
               });
@@ -1101,8 +1096,8 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  // Get victory message
-  function getVictoryMessage(winner: PlayerColor): string {
+  // Get victory message (based on how lopsided the final score was)
+  function getVictoryMessage(): string {
     const scoreDiff = Math.abs(gameState.score.red - gameState.score.black);
     if (scoreDiff >= 8) return 'Decisive Victory!';
     if (scoreDiff >= 5) return 'Dominant Performance!';
@@ -1135,7 +1130,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     function handleQuit() {
       // Show custom confirmation dialog
       addConfirmDialog({
-        message: '🚪 Quit Game?',
+        message: 'Quit Game?',
         description: 'This will clear all saved game data and return to the main menu. This action cannot be undone.',
         confirmText: 'Quit',
         cancelText: 'Cancel',
@@ -1149,7 +1144,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           // Show confirmation toast
           addToast({
             type: 'info',
-            message: '🚪 Game Quit',
+            message: 'Game Quit',
             description: 'All game data has been cleared. Returning to menu.',
             duration: 3000,
           });
@@ -1188,7 +1183,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           {multiJumpInProgress && (
             <div className="mt-4 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg backdrop-blur-sm">
               <p className="text-yellow-300 font-semibold text-center">
-                🔄 Multi-Jump in Progress - Continue capturing!
+                <Repeat className="inline-block w-5 h-5 mr-2 align-text-bottom" aria-hidden="true" />Multi-Jump in Progress - Continue capturing!
               </p>
             </div>
           )}
@@ -1197,14 +1192,23 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           {aiThinking && (
             <div className="mt-4 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg backdrop-blur-sm animate-pulse">
               <p className="text-blue-300 font-semibold text-center">
-                🤖 AI is thinking...
+                <Bot className="inline-block w-5 h-5 mr-2 align-text-bottom" aria-hidden="true" />
+                AI is thinking...
               </p>
+              {aiThinkingMessage && (
+                <p className="text-blue-200/70 text-sm text-center mt-1">
+                  {aiThinkingMessage}
+                </p>
+              )}
             </div>
           )}
         </div>
         
         {/* Sidebar */}
         <div className="w-full lg:w-96 lg:flex-shrink-0 space-y-4">
+          {/* Toasts dock here on wide screens so they never sit over the board */}
+          <ToastOutlet />
+
           <GameInfo
             currentPlayer={gameState.currentPlayer}
             turnNumber={turnNumber}
@@ -1224,9 +1228,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           
           <button
             onClick={onBackToMenu}
-            className="w-full px-6 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg hover:bg-primary/5"
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg hover:bg-primary/5"
           >
-            ← Back to Menu
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />Back to Menu
           </button>
         </div>
       </div>
@@ -1239,18 +1243,17 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             <div className="relative bg-gradient-to-br from-yellow-500/20 via-yellow-600/20 to-orange-500/20 p-6 text-center border-b border-primary/20">
               <div className="flex justify-center mb-3">
                 <div className="p-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-lg">
-                  <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2L15 9L22 9L17 14L19 21L12 17L5 21L7 14L2 9L9 9L12 2Z" />
-                  </svg>
+                  {/* Was the same 5-pointed star path used for the "king crown" */}
+                  <Trophy className="w-10 h-10 text-white" aria-hidden="true" />
                 </div>
               </div>
               <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                 {gameState.winner === 'red' 
-                  ? (isAIGame ? '🤖 AI' : 'Red') 
+                  ? (isAIGame ? 'AI' : 'Red') 
                   : 'Black'} Wins!
               </h2>
               <p className="text-base text-gray-600 dark:text-gray-400 mb-1">
-                {getVictoryMessage(gameState.winner)}
+                {getVictoryMessage()}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-500">
                 Congratulations, you have successfully conquered the board.
@@ -1308,12 +1311,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Kings Promoted</p>
                 <div className="flex justify-around">
                   <div className="text-center">
-                    <p className="text-xl font-bold text-yellow-500">👑</p>
+                    <p className="flex justify-center text-yellow-500"><Crown className="w-6 h-6" aria-hidden="true" /></p>
                     <p className="text-base font-bold text-gray-900 dark:text-white">{kingsPromoted.red}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Red</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xl font-bold text-yellow-500">👑</p>
+                    <p className="flex justify-center text-yellow-500"><Crown className="w-6 h-6" aria-hidden="true" /></p>
                     <p className="text-base font-bold text-gray-900 dark:text-white">{kingsPromoted.black}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Black</p>
                   </div>
@@ -1324,21 +1327,21 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
               <div className="space-y-2 pt-1">
                 <button
                   onClick={handleRematch}
-                  className="w-full py-2.5 px-6 font-bold text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-300 transform hover:scale-[1.02] shadow-lg"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-6 font-bold text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-300 transform hover:scale-[1.02] shadow-lg"
                 >
-                  🔄 Rematch
+                  <RotateCcw className="w-4 h-4" aria-hidden="true" />Rematch
                 </button>
                 <button
                   onClick={handleNewGame}
-                  className="w-full py-2.5 px-6 font-bold text-gray-800 dark:text-white bg-primary/20 dark:bg-primary/30 hover:bg-primary/30 dark:hover:bg-primary/40 rounded-lg transition-all duration-300"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-6 font-bold text-gray-800 dark:text-white bg-primary/20 dark:bg-primary/30 hover:bg-primary/30 dark:hover:bg-primary/40 rounded-lg transition-all duration-300"
                 >
-                  ✨ New Game
+                  <Sparkles className="w-4 h-4" aria-hidden="true" />New Game
                 </button>
                 <button
                   onClick={onBackToMenu}
-                  className="w-full py-2.5 px-6 font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 rounded-lg transition-all duration-300"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-6 font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 rounded-lg transition-all duration-300"
                 >
-                  ← Return to Menu
+                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />Return to Menu
                 </button>
               </div>
             </div>

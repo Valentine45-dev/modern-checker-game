@@ -1,107 +1,177 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { CheckCircle2, XCircle, AlertTriangle, Info, HelpCircle, X, type LucideIcon } from 'lucide-react';
+import { ToastContext, useToast, type Toast, type ToastType } from './toastContext';
 
-// Toast types
-type ToastType = 'success' | 'error' | 'info' | 'warning' | 'confirm';
-type ToastPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center';
+type ToastPlacement = 'docked' | 'bottom';
 
-interface Toast {
-  id: string;
-  type: ToastType;
-  message: string;
-  description?: string;
-  duration?: number;
-  onConfirm?: () => void;
-  onCancel?: () => void;
-  confirmText?: string;
-  cancelText?: string;
+/** At most this many non-confirm toasts are visible at once. */
+const MAX_VISIBLE = 3;
+/** An identical message inside this window is swallowed instead of stacked. */
+const DEDUPE_WINDOW_MS = 1500;
+/** Toasts dock into the sidebar at this width and above, so they never cover the board. */
+const DOCK_QUERY = '(min-width: 1024px)';
+
+/** Tracks a media query so we can choose a placement without guessing. */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
+    setMatches(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+
+  return matches;
 }
 
-interface ToastContextType {
-  toasts: Toast[];
-  addToast: (toast: Omit<Toast, 'id'>) => void;
-  addConfirmDialog: (toast: Omit<Toast, 'id' | 'type'>) => void;
-  removeToast: (id: string) => void;
-}
+/**
+ * Renders where toasts should appear on wide screens. Drop this into the game
+ * sidebar: toasts then flow inside that column instead of floating over the
+ * board. When it isn't mounted (menu, settings) toasts fall back to a bottom
+ * snackbar.
+ */
+export const ToastOutlet: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const { registerOutlet } = useToast();
+  const ref = useRef<HTMLDivElement>(null);
 
-// Toast Context
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
+  useEffect(() => {
+    registerOutlet(ref.current);
+    return () => registerOutlet(null);
+  }, [registerOutlet]);
 
-// Custom hook for using toasts
-export const useToast = () => {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within ToastProvider');
-  }
-  return context;
+  // `empty:hidden` keeps the surrounding `space-y-*` gap from showing when
+  // there are no toasts.
+  return <div ref={ref} className={`empty:hidden space-y-3 ${className}`} />;
 };
 
 // Toast Provider Component
-export const ToastProvider: React.FC<{ children: React.ReactNode; position?: ToastPosition }> = ({ 
-  children, 
-  position = 'top-right' 
-}) => {
+export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [outlet, setOutlet] = useState<HTMLElement | null>(null);
+  const canDock = useMediaQuery(DOCK_QUERY);
 
-  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    const newToast = { ...toast, id };
-    setToasts((prev) => [...prev, newToast]);
+  const recentRef = useRef<Map<string, number>>(new Map());
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-    // Auto remove after duration (except for confirm dialogs)
-    if (toast.type !== 'confirm') {
-      const duration = toast.duration || 5000;
-      setTimeout(() => {
-        removeToast(id);
-      }, duration);
-    }
-  }, []);
-
-    const addConfirmDialog = useCallback((toast: Omit<Toast, 'id' | 'type'>) => {
-      const id = Math.random().toString(36).substr(2, 9);
-      const newToast: Toast = { 
-        ...toast, 
-        id, 
-        type: 'confirm',
-        confirmText: toast.confirmText || 'OK',
-        cancelText: toast.cancelText || 'Cancel'
-      };
-      setToasts((prev) => [...prev, newToast]);
-    }, []);
+  const registerOutlet = useCallback((el: HTMLElement | null) => setOutlet(el), []);
 
   const removeToast = useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  // Position classes
-  const positionClasses = {
-    'top-right': 'top-4 right-4',
-    'top-left': 'top-4 left-4',
-    'bottom-right': 'bottom-4 right-4',
-    'bottom-left': 'bottom-4 left-4',
-    'top-center': 'top-4 left-1/2 -translate-x-1/2',
-    'bottom-center': 'bottom-4 left-1/2 -translate-x-1/2',
-  };
+  const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+
+  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
+    // Collapse repeats of the same event instead of stacking them up.
+    const key = `${toast.type}:${toast.message}`;
+    const now = Date.now();
+    const last = recentRef.current.get(key);
+    if (last !== undefined && now - last < DEDUPE_WINDOW_MS) return;
+    recentRef.current.set(key, now);
+
+    const id = newId();
+    const newToast: Toast = { ...toast, id };
+
+    setToasts((prev) => {
+      const next = [...prev, newToast];
+      // Never trim confirm dialogs — the user is waiting on them.
+      const confirms = next.filter((t) => t.type === 'confirm');
+      const rest = next.filter((t) => t.type !== 'confirm').slice(-MAX_VISIBLE);
+      return [...rest, ...confirms];
+    });
+
+    const duration = toast.duration || 5000;
+    const timer = setTimeout(() => removeToast(id), duration);
+    timersRef.current.set(id, timer);
+  }, [removeToast]);
+
+  const addConfirmDialog = useCallback((toast: Omit<Toast, 'id' | 'type'>) => {
+    const newToast: Toast = {
+      ...toast,
+      id: newId(),
+      type: 'confirm',
+      confirmText: toast.confirmText || 'OK',
+      cancelText: toast.cancelText || 'Cancel'
+    };
+    setToasts((prev) => [...prev, newToast]);
+  }, []);
+
+  // Clear any pending dismiss timers if the provider goes away.
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
+  }, []);
+
+  const placement: ToastPlacement = canDock && outlet ? 'docked' : 'bottom';
+
+  const stack = toasts.map((toast) => (
+    <ToastItem
+      key={toast.id}
+      toast={toast}
+      placement={placement}
+      onClose={() => removeToast(toast.id)}
+    />
+  ));
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, addConfirmDialog, removeToast }}>
+    <ToastContext.Provider value={{ toasts, addToast, addConfirmDialog, removeToast, registerOutlet }}>
       {children}
-      <div className={`fixed ${positionClasses[position]} z-50 flex flex-col gap-3 pointer-events-none`}>
-        {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
-        ))}
-      </div>
+
+      {placement === 'docked' && outlet
+        ? createPortal(stack, outlet)
+        : (
+          <div
+            className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2
+                       w-[min(92vw,26rem)] pointer-events-none"
+          >
+            {stack}
+          </div>
+        )}
     </ToastContext.Provider>
   );
 };
 
+const TOAST_STYLES: Record<ToastType, { surface: string; accent: string }> = {
+  success: { surface: 'from-green-500/20 to-emerald-500/20 border-green-500/30', accent: 'text-green-400' },
+  error:   { surface: 'from-red-500/20 to-rose-500/20 border-red-500/30',        accent: 'text-red-400' },
+  warning: { surface: 'from-yellow-500/20 to-amber-500/20 border-yellow-500/30', accent: 'text-yellow-400' },
+  info:    { surface: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',      accent: 'text-blue-400' },
+  confirm: { surface: 'from-orange-500/20 to-red-500/20 border-orange-500/30',   accent: 'text-orange-400' },
+};
+
+const TOAST_ICONS: Record<ToastType, LucideIcon> = {
+  success: CheckCircle2,
+  error: XCircle,
+  warning: AlertTriangle,
+  info: Info,
+  confirm: HelpCircle,
+};
+
 // Individual Toast Item Component
-const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onClose }) => {
+const ToastItem: React.FC<{ toast: Toast; placement: ToastPlacement; onClose: () => void }> = ({
+  toast,
+  placement,
+  onClose,
+}) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
   useEffect(() => {
-    // Trigger enter animation
-    setTimeout(() => setIsVisible(true), 10);
+    const t = setTimeout(() => setIsVisible(true), 10);
+    return () => clearTimeout(t);
   }, []);
 
   const handleClose = () => {
@@ -109,90 +179,38 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
     setTimeout(onClose, 300);
   };
 
+  const { surface, accent } = TOAST_STYLES[toast.type];
+  const Icon = TOAST_ICONS[toast.type];
 
-  const getIcon = () => {
-    switch (toast.type) {
-      case 'success':
-        return (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'error':
-        return (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'warning':
-        return (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        );
-      case 'info':
-        return (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'confirm':
-        return (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-    }
-  };
-
-  const getColors = () => {
-    switch (toast.type) {
-      case 'success':
-        return 'from-green-500/20 to-emerald-500/20 border-green-500/30 text-green-400';
-      case 'error':
-        return 'from-red-500/20 to-rose-500/20 border-red-500/30 text-red-400';
-      case 'warning':
-        return 'from-yellow-500/20 to-amber-500/20 border-yellow-500/30 text-yellow-400';
-      case 'info':
-        return 'from-blue-500/20 to-cyan-500/20 border-blue-500/30 text-blue-400';
-      case 'confirm':
-        return 'from-orange-500/20 to-red-500/20 border-orange-500/30 text-orange-400';
-      default:
-        return 'from-gray-500/20 to-slate-500/20 border-gray-500/30 text-gray-400';
-    }
-  };
+  // Docked toasts slide down into the sidebar; the bottom snackbar slides up.
+  const hidden = placement === 'docked' ? '-translate-y-2 opacity-0' : 'translate-y-3 opacity-0';
+  const shown = 'translate-y-0 opacity-100';
 
   return (
     <div
+      role={toast.type === 'confirm' ? 'alertdialog' : 'status'}
+      aria-live={toast.type === 'error' || toast.type === 'warning' ? 'assertive' : 'polite'}
       className={`
-        pointer-events-auto
-        min-w-[320px] max-w-md
-        backdrop-blur-xl bg-gradient-to-br ${getColors()}
+        pointer-events-auto w-full
+        backdrop-blur-xl bg-gradient-to-br ${surface}
         border rounded-xl shadow-2xl
         transform transition-all duration-300 ease-out
-        ${isVisible && !isLeaving ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
+        ${isVisible && !isLeaving ? shown : hidden}
         ${isLeaving ? 'scale-95' : 'scale-100'}
       `}
     >
-      <div className="relative p-4">
-        {/* Animated background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent rounded-xl animate-pulse" />
-        
+      <div className="relative p-3 sm:p-4">
         <div className="relative flex gap-3">
           {/* Icon */}
-          <div className={`flex-shrink-0 ${getColors().split(' ')[3]}`}>
-            {getIcon()}
+          <div className={`flex-shrink-0 ${accent}`}>
+            <Icon className="w-5 h-5" aria-hidden="true" />
           </div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-white text-sm">
-              {toast.message}
-            </p>
+            <p className="font-semibold text-white text-sm">{toast.message}</p>
             {toast.description && (
-              <p className="mt-1 text-xs text-white/70">
-                {toast.description}
-              </p>
+              <p className="mt-1 text-xs text-white/70">{toast.description}</p>
             )}
           </div>
 
@@ -200,11 +218,10 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
           {toast.type !== 'confirm' && (
             <button
               onClick={handleClose}
+              aria-label="Dismiss notification"
               className="flex-shrink-0 text-white/60 hover:text-white transition-colors duration-200"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -214,9 +231,7 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 rounded-b-xl overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-white/40 to-white/20 animate-shrink"
-              style={{
-                animationDuration: `${toast.duration || 5000}ms`,
-              }}
+              style={{ animationDuration: `${toast.duration || 5000}ms` }}
             />
           </div>
         )}
@@ -254,4 +269,3 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
 };
 
 export default ToastProvider;
-

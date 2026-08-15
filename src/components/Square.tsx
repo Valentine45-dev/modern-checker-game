@@ -51,12 +51,11 @@ const Square = ({
     >
       <div className="absolute inset-0 flex items-center justify-center p-1">
         {piece && (
-          <Piece 
-            piece={piece} 
+          <Piece
+            piece={piece}
             isSelected={isSelected}
             isShaking={isShaking}
             hasCapture={hasCapture}
-            onClick={() => onPieceClick(piece)}
           />
         )}
         {isValidMove && !piece && gameSettings.showMoveHints && (

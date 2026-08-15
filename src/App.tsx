@@ -92,7 +92,7 @@ function App() {
   };
 
   return (
-    <ToastProvider position="top-right">
+    <ToastProvider>
       <div className="font-display bg-background-light dark:bg-background-dark text-white checker-bg min-h-screen flex flex-col">
         <Header onSettingsClick={handleSettings} />
 

@@ -1,3 +1,4 @@
+import { Crown } from 'lucide-react';
 import { Piece as PieceType } from '../types';
 import { getGameSettings } from '../utils/gameSettings';
 import { getPieceStyle, getPieceClasses, getKingIconClasses } from '../utils/visualThemes';
@@ -7,13 +8,15 @@ interface PieceProps {
   isSelected: boolean;
   isShaking: boolean;
   hasCapture: boolean;
-  onClick: () => void;
 }
 
-const Piece = ({ piece, isSelected, isShaking, hasCapture, onClick }: PieceProps) => {
+// Note: this component deliberately has no onClick. The parent Square owns the
+// click for the whole cell — giving the piece its own handler made every click
+// fire twice (once here, once again as the event bubbled up to Square).
+const Piece = ({ piece, isSelected, isShaking, hasCapture }: PieceProps) => {
   const gameSettings = getGameSettings();
   const pieceStyle = getPieceStyle(gameSettings);
-  
+
   const className = getPieceClasses(
     pieceStyle,
     piece,
@@ -22,24 +25,18 @@ const Piece = ({ piece, isSelected, isShaking, hasCapture, onClick }: PieceProps
     hasCapture,
     gameSettings.animationsEnabled
   );
-  
+
+  const label = `${piece.color} ${piece.type === 'king' ? 'king' : 'piece'}`;
+
   return (
-    <div 
-      onClick={onClick}
-      className={className}
-    >
+    <div className={className} role="img" aria-label={label}>
       {piece.type === 'king' && (
-        <svg 
-          className={getKingIconClasses(pieceStyle)}
-          fill="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path d="M12 2L15 9L22 9L17 14L19 21L12 17L5 21L7 14L2 9L9 9L12 2Z" />
-        </svg>
+        // Was a 5-pointed star path, despite everything in the UI calling it a
+        // crown. Now actually a crown.
+        <Crown className={getKingIconClasses(pieceStyle)} aria-hidden="true" />
       )}
     </div>
   );
 };
 
 export default Piece;
-
