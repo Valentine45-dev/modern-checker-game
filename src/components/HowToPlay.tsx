@@ -13,6 +13,16 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
   return (
     <main className="flex-grow flex items-center justify-center py-8 px-4">
       <div className="w-full max-w-4xl mx-auto">
+        {/* Back button at the top — same reasoning as Settings, this page is a
+            long scroll and the only exit used to be at the very bottom. */}
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 mb-6 px-4 py-2 text-gray-300 hover:text-white bg-primary/10 hover:bg-primary/20 border border-primary/20 hover:border-primary/40 rounded-lg transition-all duration-200"
+        >
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+          Back to Menu
+        </button>
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-4">How to Play Checkers</h1>
@@ -222,17 +232,6 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
               </div>
             </div>
           </section>
-        </div>
-
-        {/* Back Button */}
-        <div className="text-center mt-8">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-2 px-8 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
-          >
-            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-            Back to Menu
-          </button>
         </div>
       </div>
     </main>
