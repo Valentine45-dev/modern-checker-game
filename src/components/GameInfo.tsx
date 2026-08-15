@@ -1,3 +1,4 @@
+import { Users, Bot, Target, Flame } from 'lucide-react';
 import { PlayerColor, GameMode } from '../types';
 
 interface GameInfoProps {
@@ -17,16 +18,28 @@ interface GameInfoProps {
 const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode = 'pvp' }: GameInfoProps) => {
   const isAIGame = gameMode !== 'pvp';
   
-  const getGameModeLabel = () => {
-    switch (gameMode) {
-      case 'pvp': return '👥 PvP';
-      case 'ai-easy': return '🤖 vs AI (Easy)';
-      case 'ai-medium': return '🎯 vs AI (Medium)';
-      case 'ai-hard': return '🔥 vs AI (Hard)';
-      default: return '👥 PvP';
-    }
+  const MODE_LABELS: Record<GameMode, { Icon: typeof Users; label: string }> = {
+    'pvp': { Icon: Users, label: 'PvP' },
+    'ai-easy': { Icon: Bot, label: 'vs AI (Easy)' },
+    'ai-medium': { Icon: Target, label: 'vs AI (Medium)' },
+    'ai-hard': { Icon: Flame, label: 'vs AI (Hard)' },
   };
-  
+
+  const mode = MODE_LABELS[gameMode] ?? MODE_LABELS.pvp;
+  const ModeIcon = mode.Icon;
+
+  // The red side is the AI in every AI mode, so label it accordingly
+  const RedLabel = () =>
+    isAIGame ? (
+      <span className="inline-flex items-center gap-1.5">
+        <Bot className="w-4 h-4" aria-hidden="true" />
+        AI
+      </span>
+    ) : (
+      <>Red Player</>
+    );
+
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -41,8 +54,10 @@ const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode =
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Game Details</h2>
           <span className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Turn: {turnNumber}</span>
         </div>
-        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-          Mode: {getGameModeLabel()}
+        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+          <span>Mode:</span>
+          <ModeIcon className="w-4 h-4" aria-hidden="true" />
+          <span>{mode.label}</span>
         </div>
       </div>
 
@@ -57,7 +72,7 @@ const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode =
         </p>
         <div className="flex items-center justify-between">
           <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
-            {isAIGame ? '🤖 AI' : 'Red Player'}
+            <RedLabel />
           </p>
           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 shadow-lg bg-red-600 border-red-800" />
         </div>
@@ -107,7 +122,7 @@ const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode =
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-red-600" />
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {isAIGame ? '🤖 AI' : 'Red Player'}
+                <RedLabel />
               </span>
             </div>
             <span className="font-mono text-base sm:text-lg font-bold text-gray-900 dark:text-white">

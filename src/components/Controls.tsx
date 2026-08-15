@@ -1,3 +1,5 @@
+import { Sparkles, Undo2, Flag, LogOut } from 'lucide-react';
+
 interface ControlsProps {
   onNewGame: () => void;
   onResign: () => void;
@@ -10,34 +12,38 @@ const Controls = ({ onNewGame, onResign, onQuit, onUndo, canUndo = false }: Cont
   return (
     <div className="bg-background-light/80 dark:bg-background-dark/90 backdrop-blur-sm p-4 rounded-xl border border-primary/20">
       <div className="flex flex-col gap-3">
-        <button 
+        <button
           onClick={onNewGame}
-          className="w-full flex items-center justify-center px-6 py-3 text-sm sm:text-base font-bold rounded-lg text-white bg-primary hover:bg-opacity-90 transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg"
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 text-sm sm:text-base font-bold rounded-lg text-white bg-primary hover:bg-opacity-90 transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg"
         >
-          ✨ New Game
+          <Sparkles className="w-4 h-4" aria-hidden="true" />
+          New Game
         </button>
-        
+
         {canUndo && onUndo && (
-          <button 
+          <button
             onClick={onUndo}
-            className="w-full flex items-center justify-center px-6 py-2.5 border border-primary/20 dark:border-primary/30 text-sm sm:text-base font-medium rounded-lg text-gray-800 dark:text-gray-200 bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-6 py-2.5 border border-primary/20 dark:border-primary/30 text-sm sm:text-base font-medium rounded-lg text-gray-800 dark:text-gray-200 bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 transition-all"
           >
-            ↩️ Undo Move
+            <Undo2 className="w-4 h-4" aria-hidden="true" />
+            Undo Move
           </button>
         )}
-        
-        <button 
+
+        <button
           onClick={onResign}
-          className="w-full flex items-center justify-center px-6 py-2.5 border border-primary/20 dark:border-primary/30 text-sm sm:text-base font-medium rounded-lg text-gray-800 dark:text-gray-200 bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-6 py-2.5 border border-primary/20 dark:border-primary/30 text-sm sm:text-base font-medium rounded-lg text-gray-800 dark:text-gray-200 bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 transition-all"
         >
-          🏳️ Resign
+          <Flag className="w-4 h-4" aria-hidden="true" />
+          Resign
         </button>
-        
-        <button 
+
+        <button
           onClick={onQuit}
-          className="w-full flex items-center justify-center px-6 py-2.5 border border-red-500/30 text-sm sm:text-base font-medium rounded-lg text-red-600 dark:text-red-400 bg-red-500/10 dark:bg-red-500/20 hover:bg-red-500/20 dark:hover:bg-red-500/30 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-6 py-2.5 border border-red-500/30 text-sm sm:text-base font-medium rounded-lg text-red-600 dark:text-red-400 bg-red-500/10 dark:bg-red-500/20 hover:bg-red-500/20 dark:hover:bg-red-500/30 transition-all"
         >
-          🚪 Quit Game
+          <LogOut className="w-4 h-4" aria-hidden="true" />
+          Quit Game
         </button>
       </div>
     </div>
@@ -45,4 +51,3 @@ const Controls = ({ onNewGame, onResign, onQuit, onUndo, canUndo = false }: Cont
 };
 
 export default Controls;
-

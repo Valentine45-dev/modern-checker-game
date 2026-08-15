@@ -1,3 +1,4 @@
+import { Users, Bot, Brain, Flame, ArrowLeft } from 'lucide-react';
 import { GameMode } from '../types';
 
 interface GameModeSelectionProps {
@@ -11,28 +12,28 @@ const GameModeSelection = ({ onSelectMode, onBack }: GameModeSelectionProps) => 
       id: 'pvp' as GameMode,
       title: 'Player vs Player',
       description: 'Play against a friend locally',
-      icon: '👥',
+      Icon: Users,
       gradient: 'from-blue-500 to-purple-600'
     },
     {
       id: 'ai-easy' as GameMode,
       title: 'vs AI - Easy',
       description: 'Perfect for beginners',
-      icon: '🤖',
+      Icon: Bot,
       gradient: 'from-green-500 to-emerald-600'
     },
     {
       id: 'ai-medium' as GameMode,
       title: 'vs AI - Medium',
       description: 'Balanced challenge',
-      icon: '🧠',
+      Icon: Brain,
       gradient: 'from-yellow-500 to-orange-600'
     },
     {
       id: 'ai-hard' as GameMode,
       title: 'vs AI - Hard',
       description: 'For experienced players',
-      icon: '🔥',
+      Icon: Flame,
       gradient: 'from-red-500 to-pink-600'
     }
   ];
@@ -65,8 +66,8 @@ const GameModeSelection = ({ onSelectMode, onBack }: GameModeSelectionProps) => 
               
               {/* Content */}
               <div className="relative z-10 text-center">
-                <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  {mode.icon}
+                <div className="mb-4 flex justify-center group-hover:scale-110 transition-transform duration-300">
+                  <mode.Icon className="w-14 h-14 text-white" strokeWidth={1.5} aria-hidden="true" />
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-yellow-200 transition-colors duration-300">
                   {mode.title}
@@ -88,11 +89,12 @@ const GameModeSelection = ({ onSelectMode, onBack }: GameModeSelectionProps) => 
         <div className="text-center">
           <button
             onClick={onBack}
-            className="px-8 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg 
+            className="inline-flex items-center gap-2 px-8 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg
                        transition-all duration-300 backdrop-blur-sm border border-white/20
                        hover:border-white/30 focus:outline-none focus:ring-4 focus:ring-white/30"
           >
-            ← Back to Menu
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+            Back to Menu
           </button>
         </div>
       </div>

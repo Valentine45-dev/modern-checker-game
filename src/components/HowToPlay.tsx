@@ -1,4 +1,9 @@
 import React from 'react';
+import {
+  Target, Gamepad2, Users, Bot, ClipboardList, Zap, Repeat, Crown,
+  SlidersHorizontal, MousePointerClick, Sparkles, Lightbulb, CheckCircle2,
+  Circle, XCircle, Trophy, Swords, ArrowLeft,
+} from 'lucide-react';
 
 interface HowToPlayProps {
   onBack: () => void;
@@ -20,7 +25,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Game Overview */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🎯</span>
+              <Target className="w-7 h-7 text-primary" aria-hidden="true" />
               Game Overview
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
@@ -33,18 +38,18 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Game Modes */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🎮</span>
+              <Gamepad2 className="w-7 h-7 text-primary" aria-hidden="true" />
               Game Modes
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-blue-500/10 rounded-lg p-6 border border-blue-500/20">
-                <h3 className="text-xl font-semibold text-blue-300 mb-3">👥 Player vs Player</h3>
+                <h3 className="text-xl font-semibold text-blue-300 mb-3"><span className="inline-flex items-center gap-2"><Users className="w-5 h-5" aria-hidden="true" />Player vs Player</span></h3>
                 <p className="text-gray-200 text-sm leading-relaxed">
                   Play against a friend locally. Red pieces start first. Perfect for face-to-face competition and learning the game together.
                 </p>
               </div>
               <div className="bg-purple-500/10 rounded-lg p-6 border border-purple-500/20">
-                <h3 className="text-xl font-semibold text-purple-300 mb-3">🤖 Player vs AI</h3>
+                <h3 className="text-xl font-semibold text-purple-300 mb-3"><span className="inline-flex items-center gap-2"><Bot className="w-5 h-5" aria-hidden="true" />Player vs AI</span></h3>
                 <p className="text-gray-200 text-sm leading-relaxed">
                   Challenge our AI opponent with three difficulty levels: Easy, Medium, and Hard. Black pieces (you) start first against the AI.
                 </p>
@@ -55,7 +60,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Basic Rules */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">📋</span>
+              <ClipboardList className="w-7 h-7 text-primary" aria-hidden="true" />
               Basic Rules
             </h2>
             <div className="space-y-4">
@@ -83,7 +88,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
                 <h3 className="text-lg font-semibold text-yellow-300 mb-2">King Promotion</h3>
                 <ul className="text-gray-200 text-sm space-y-1 ml-4">
                   <li>• Normal pieces become kings when reaching the opposite end</li>
-                  <li>• Kings are marked with a crown icon 👑</li>
+                  <li>• Kings are marked with a crown icon</li>
                   <li>• Kings have enhanced movement and capturing abilities</li>
                 </ul>
               </div>
@@ -93,18 +98,18 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Advanced Features */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">⚡</span>
+              <Zap className="w-7 h-7 text-primary" aria-hidden="true" />
               Advanced Features
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-orange-500/10 rounded-lg p-6 border border-orange-500/20">
-                <h3 className="text-xl font-semibold text-orange-300 mb-3">🔄 Multi-Jump Captures</h3>
+                <h3 className="text-xl font-semibold text-orange-300 mb-3"><span className="inline-flex items-center gap-2"><Repeat className="w-5 h-5" aria-hidden="true" />Multi-Jump Captures</span></h3>
                 <p className="text-gray-200 text-sm leading-relaxed">
                   When you capture a piece, you must continue capturing if more captures are available. The game will highlight your piece and show available continuation moves.
                 </p>
               </div>
               <div className="bg-cyan-500/10 rounded-lg p-6 border border-cyan-500/20">
-                <h3 className="text-xl font-semibold text-cyan-300 mb-3">👑 Flying Kings</h3>
+                <h3 className="text-xl font-semibold text-cyan-300 mb-3"><span className="inline-flex items-center gap-2"><Crown className="w-5 h-5" aria-hidden="true" />Flying Kings</span></h3>
                 <p className="text-gray-200 text-sm leading-relaxed">
                   Kings can move any number of squares diagonally in one direction, making them powerful pieces for both movement and long-distance captures.
                 </p>
@@ -115,22 +120,22 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Game Controls */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🎛️</span>
+              <SlidersHorizontal className="w-7 h-7 text-primary" aria-hidden="true" />
               Game Controls
             </h2>
             <div className="grid md:grid-cols-3 gap-4">
               <div className="bg-gray-500/10 rounded-lg p-4 border border-gray-500/20 text-center">
-                <div className="text-2xl mb-2">🖱️</div>
+                <div className="mb-2 flex justify-center"><MousePointerClick className="w-6 h-6 text-primary" aria-hidden="true" /></div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Click to Select</h3>
                 <p className="text-gray-200 text-xs">Click on your piece to select it and see available moves</p>
               </div>
               <div className="bg-gray-500/10 rounded-lg p-4 border border-gray-500/20 text-center">
-                <div className="text-2xl mb-2">🎯</div>
+                <div className="mb-2 flex justify-center"><Target className="w-6 h-6 text-primary" aria-hidden="true" /></div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Click to Move</h3>
                 <p className="text-gray-200 text-xs">Click on a highlighted square to move your piece</p>
               </div>
               <div className="bg-gray-500/10 rounded-lg p-4 border border-gray-500/20 text-center">
-                <div className="text-2xl mb-2">✨</div>
+                <div className="mb-2 flex justify-center"><Sparkles className="w-6 h-6 text-primary" aria-hidden="true" /></div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Auto-Save</h3>
                 <p className="text-gray-200 text-xs">Your game is automatically saved after every move</p>
               </div>
@@ -140,27 +145,27 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Visual Indicators */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">💡</span>
+              <Lightbulb className="w-7 h-7 text-primary" aria-hidden="true" />
               Visual Indicators
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/20">
-                  <h3 className="text-lg font-semibold text-green-300 mb-2">✅ Valid Moves</h3>
+                  <h3 className="text-lg font-semibold text-green-300 mb-2"><span className="inline-flex items-center gap-2"><CheckCircle2 className="w-5 h-5" aria-hidden="true" />Valid Moves</span></h3>
                   <p className="text-gray-200 text-sm">Green dots show where you can move your selected piece</p>
                 </div>
                 <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
-                  <h3 className="text-lg font-semibold text-blue-300 mb-2">🔵 Selected Piece</h3>
+                  <h3 className="text-lg font-semibold text-blue-300 mb-2"><span className="inline-flex items-center gap-2"><Circle className="w-5 h-5" aria-hidden="true" />Selected Piece</span></h3>
                   <p className="text-gray-200 text-sm">Blue ring around your currently selected piece</p>
                 </div>
               </div>
               <div className="space-y-4">
                 <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/20">
-                  <h3 className="text-lg font-semibold text-yellow-300 mb-2">⚡ Capture Available</h3>
+                  <h3 className="text-lg font-semibold text-yellow-300 mb-2"><span className="inline-flex items-center gap-2"><Zap className="w-5 h-5" aria-hidden="true" />Capture Available</span></h3>
                   <p className="text-gray-200 text-sm">Pieces with mandatory captures glow with a pulsing effect</p>
                 </div>
                 <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/20">
-                  <h3 className="text-lg font-semibold text-red-300 mb-2">❌ Invalid Move</h3>
+                  <h3 className="text-lg font-semibold text-red-300 mb-2"><span className="inline-flex items-center gap-2"><XCircle className="w-5 h-5" aria-hidden="true" />Invalid Move</span></h3>
                   <p className="text-gray-200 text-sm">Pieces shake when clicked if they have no valid moves</p>
                 </div>
               </div>
@@ -170,7 +175,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Winning Conditions */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🏆</span>
+              <Trophy className="w-7 h-7 text-primary" aria-hidden="true" />
               Winning the Game
             </h2>
             <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 rounded-lg p-6 border border-yellow-500/20">
@@ -199,20 +204,20 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Tips */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">💡</span>
+              <Lightbulb className="w-7 h-7 text-primary" aria-hidden="true" />
               Pro Tips
             </h2>
             <div className="grid md:grid-cols-3 gap-4">
               <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/20">
-                <h3 className="text-lg font-semibold text-purple-300 mb-2">🎯 Strategy</h3>
+                <h3 className="text-lg font-semibold text-purple-300 mb-2"><span className="inline-flex items-center gap-2"><Target className="w-5 h-5" aria-hidden="true" />Strategy</span></h3>
                 <p className="text-gray-200 text-xs">Control the center of the board and protect your pieces</p>
               </div>
               <div className="bg-pink-500/10 rounded-lg p-4 border border-pink-500/20">
-                <h3 className="text-lg font-semibold text-pink-300 mb-2">⚔️ Captures</h3>
+                <h3 className="text-lg font-semibold text-pink-300 mb-2"><span className="inline-flex items-center gap-2"><Swords className="w-5 h-5" aria-hidden="true" />Captures</span></h3>
                 <p className="text-gray-200 text-xs">Always look for multi-jump opportunities to maximize captures</p>
               </div>
               <div className="bg-indigo-500/10 rounded-lg p-4 border border-indigo-500/20">
-                <h3 className="text-lg font-semibold text-indigo-300 mb-2">👑 Kings</h3>
+                <h3 className="text-lg font-semibold text-indigo-300 mb-2"><span className="inline-flex items-center gap-2"><Crown className="w-5 h-5" aria-hidden="true" />Kings</span></h3>
                 <p className="text-gray-200 text-xs">Get your pieces to the opposite end to promote them to kings</p>
               </div>
             </div>
@@ -223,9 +228,10 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
         <div className="text-center mt-8">
           <button
             onClick={onBack}
-            className="px-8 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-2 px-8 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
           >
-            ← Back to Menu
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+            Back to Menu
           </button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { Swords, Crown } from 'lucide-react';
 import { Move } from '../types';
 
 interface MoveHistoryProps {
@@ -27,8 +28,12 @@ const MoveHistory = ({ moves, maxDisplay = 5 }: MoveHistoryProps) => {
             >
               <span className="font-bold text-gray-900 dark:text-white">#{moves.length - index}:</span>{' '}
               <span className="font-mono">{formatPosition(move.from.row, move.from.col)} → {formatPosition(move.to.row, move.to.col)}</span>
-              {move.capturedPieces && move.capturedPieces.length > 0 && <span className="text-red-500 font-medium"> ⚔️</span>}
-              {move.becameKing && <span className="text-yellow-400"> 👑</span>}
+              {move.capturedPieces && move.capturedPieces.length > 0 && (
+                <Swords className="inline-block w-3.5 h-3.5 ml-1 text-red-500 align-text-bottom" aria-label="capture" />
+              )}
+              {move.becameKing && (
+                <Crown className="inline-block w-3.5 h-3.5 ml-1 text-yellow-400 align-text-bottom" aria-label="promoted to king" />
+              )}
             </div>
           ))
         )}
