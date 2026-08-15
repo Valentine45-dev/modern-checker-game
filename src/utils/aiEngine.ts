@@ -69,7 +69,7 @@ function getFlyingKingSquares(
   const [dRow, dCol] = direction;
   let { row, col } = piece.position;
   
-  while (true) {
+  for (;;) {
     row += dRow;
     col += dCol;
     
@@ -93,7 +93,7 @@ function getFlyingKingCaptures(
   let enemyPiece: Piece | null = null;
   let capturePos: Position | null = null;
   
-  while (true) {
+  for (;;) {
     row += dRow;
     col += dCol;
     
@@ -115,7 +115,7 @@ function getFlyingKingCaptures(
     row = capturePos.row;
     col = capturePos.col;
     
-    while (true) {
+    for (;;) {
       row += dRow;
       col += dCol;
       

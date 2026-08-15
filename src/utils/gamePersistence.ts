@@ -1,4 +1,4 @@
-import { GameState } from '../types';
+import { GameState, Piece } from '../types';
 
 const GAME_STATE_KEY = 'checkers-game-state';
 
@@ -7,8 +7,8 @@ export interface SavedGameState extends GameState {
   gameStartTime: number;
   kingsPromoted: { red: number; black: number };
   multiJumpInProgress: boolean;
-  currentJumpPiece: any;
-  accumulatedCaptures: any[];
+  currentJumpPiece: Piece | null;
+  accumulatedCaptures: Piece[];
   aiThinking: boolean;
   piecesWithCaptures: string[];
   // Visual settings
@@ -22,8 +22,8 @@ export async function saveGameState(
   gameStartTime: number,
   kingsPromoted: { red: number; black: number },
   multiJumpInProgress: boolean,
-  currentJumpPiece: any,
-  accumulatedCaptures: any[],
+  currentJumpPiece: Piece | null,
+  accumulatedCaptures: Piece[],
   aiThinking: boolean,
   piecesWithCaptures: Set<string>
 ): Promise<void> {

@@ -19,7 +19,10 @@ export class SoundManager {
   private initializeAudioContext(): void {
     try {
       // Create audio context on first user interaction
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextCtor =
+        window.AudioContext ??
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      this.audioContext = AudioContextCtor ? new AudioContextCtor() : null;
     } catch (error) {
       console.warn('Web Audio API not supported:', error);
       this.audioContext = null;

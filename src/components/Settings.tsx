@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Volume2, Palette, Gamepad2, Monitor, Database, BarChart3, ArrowLeft } from 'lucide-react';
 import { GameSettings, getGameSettings, saveGameSettings, resetGameSettings, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
 
@@ -19,15 +20,13 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     saveGameSettings(settings);
   }, [settings]);
 
-  const handleSettingChange = (key: keyof GameSettings, value: any) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-    
+  const handleSettingChange = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => {
+    const next: GameSettings = { ...settings, [key]: value };
+    setSettings(next);
+
     // Update sound settings immediately
     if (key === 'soundEnabled' || key === 'soundVolume') {
-      updateSoundSettings(
-        key === 'soundEnabled' ? value : settings.soundEnabled,
-        key === 'soundVolume' ? value : settings.soundVolume
-      );
+      updateSoundSettings(next.soundEnabled, next.soundVolume);
     }
   };
 
@@ -58,7 +57,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Audio Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🔊</span>
+              <Volume2 className="w-7 h-7 text-primary" aria-hidden="true" />
               Audio Settings
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
@@ -110,9 +109,10 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                           console.warn('Failed to play test sound:', error);
                         }
                       }}
-                      className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-lg transition-all duration-200 text-sm"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-lg transition-all duration-200 text-sm"
                     >
-                      🔊 Test Sound
+                      <Volume2 className="w-4 h-4" aria-hidden="true" />
+                      Test Sound
                     </button>
                   </div>
                 )}
@@ -123,7 +123,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Visual Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🎨</span>
+              <Palette className="w-7 h-7 text-primary" aria-hidden="true" />
               Visual Settings
             </h2>
             <div className="space-y-4">
@@ -149,7 +149,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     <label className="block text-sm font-medium text-gray-300 mb-2">Board Theme</label>
                     <select
                       value={settings.boardTheme}
-                      onChange={(e) => handleSettingChange('boardTheme', e.target.value)}
+                      onChange={(e) => handleSettingChange('boardTheme', e.target.value as GameSettings['boardTheme'])}
                       className="w-full p-3 bg-background-light dark:bg-background-dark border border-primary/20 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
                     >
                       <option value="classic">Classic Wood</option>
@@ -163,7 +163,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     <label className="block text-sm font-medium text-gray-300 mb-2">Piece Style</label>
                     <select
                       value={settings.pieceStyle}
-                      onChange={(e) => handleSettingChange('pieceStyle', e.target.value)}
+                      onChange={(e) => handleSettingChange('pieceStyle', e.target.value as GameSettings['pieceStyle'])}
                       className="w-full p-3 bg-background-light dark:bg-background-dark border border-primary/20 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
                     >
                       <option value="standard">Standard</option>
@@ -180,7 +180,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Gameplay Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🎮</span>
+              <Gamepad2 className="w-7 h-7 text-primary" aria-hidden="true" />
               Gameplay Settings
             </h2>
             <div className="space-y-4">
@@ -206,7 +206,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     <label className="block text-sm font-medium text-gray-300 mb-2">Default AI Difficulty</label>
                     <select
                       value={settings.aiDifficulty}
-                      onChange={(e) => handleSettingChange('aiDifficulty', e.target.value)}
+                      onChange={(e) => handleSettingChange('aiDifficulty', e.target.value as GameSettings['aiDifficulty'])}
                       className="w-full p-3 bg-background-light dark:bg-background-dark border border-primary/20 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
                     >
                       <option value="easy">Easy</option>
@@ -219,7 +219,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     <label className="block text-sm font-medium text-gray-300 mb-2">Game Speed</label>
                     <select
                       value={settings.gameSpeed}
-                      onChange={(e) => handleSettingChange('gameSpeed', e.target.value)}
+                      onChange={(e) => handleSettingChange('gameSpeed', e.target.value as GameSettings['gameSpeed'])}
                       className="w-full p-3 bg-background-light dark:bg-background-dark border border-primary/20 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
                     >
                       <option value="slow">Slow</option>
@@ -235,7 +235,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* UI Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">🖥️</span>
+              <Monitor className="w-7 h-7 text-primary" aria-hidden="true" />
               UI Settings
             </h2>
             <div className="space-y-4">
@@ -280,7 +280,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Data Management */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">💾</span>
+              <Database className="w-7 h-7 text-primary" aria-hidden="true" />
               Data Management
             </h2>
             <div className="grid md:grid-cols-2 gap-4">
@@ -311,7 +311,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Game Statistics */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <span className="text-3xl">📊</span>
+              <BarChart3 className="w-7 h-7 text-primary" aria-hidden="true" />
               Game Statistics
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
@@ -340,9 +340,10 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         <div className="text-center mt-8">
           <button
             onClick={onBack}
-            className="px-8 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-2 px-8 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
           >
-            ← Back to Menu
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+            Back to Menu
           </button>
         </div>
       </div>
