@@ -1,4 +1,12 @@
 import { Piece, Position, PlayerColor, Board as BoardType, PossibleMove } from '../types';
+import {
+  getAllValidMovesForPlayer,
+  getPossibleCaptures,
+  findPieceById,
+  simulateMove,
+  positionsEqual,
+  opponentOf,
+} from './rules';
 
 // AI difficulty settings
 export interface AIDifficulty {
@@ -47,257 +55,13 @@ const WEIGHTS = {
   CAPTURE_THREAT: 15,     // New: Bonus for threatening captures
 };
 
-// Position utilities
-function isValidPosition(row: number, col: number): boolean {
-  return row >= 0 && row < 8 && col >= 0 && col < 8;
-}
-
-function positionsEqual(pos1: Position, pos2: Position): boolean {
-  return pos1.row === pos2.row && pos1.col === pos2.col;
-}
-
-// ============================================
-// MOVE GENERATION (copied from Game.tsx logic)
-// ============================================
-
-function getFlyingKingSquares(
-  piece: Piece,
-  board: BoardType,
-  direction: [number, number]
-): Position[] {
-  const squares: Position[] = [];
-  const [dRow, dCol] = direction;
-  let { row, col } = piece.position;
-  
-  for (;;) {
-    row += dRow;
-    col += dCol;
-    
-    if (!isValidPosition(row, col)) break;
-    if (board[row][col]) break;
-    
-    squares.push({ row, col });
-  }
-  
-  return squares;
-}
-
-function getFlyingKingCaptures(
-  piece: Piece,
-  board: BoardType,
-  direction: [number, number],
-  capturedSoFar: Piece[] = []
-): { landingSquares: Position[]; capturedPiece: Piece | null; capturePos: Position | null } {
-  const [dRow, dCol] = direction;
-  let { row, col } = piece.position;
-  let enemyPiece: Piece | null = null;
-  let capturePos: Position | null = null;
-  
-  for (;;) {
-    row += dRow;
-    col += dCol;
-    
-    if (!isValidPosition(row, col)) break;
-    
-    const square = board[row][col];
-    if (square) {
-      if (square.color !== piece.color && 
-          !capturedSoFar.some(p => p.id === square.id)) {
-        enemyPiece = square;
-        capturePos = { row, col };
-      }
-      break;
-    }
-  }
-  
-  const landingSquares: Position[] = [];
-  if (enemyPiece && capturePos) {
-    row = capturePos.row;
-    col = capturePos.col;
-    
-    for (;;) {
-      row += dRow;
-      col += dCol;
-      
-      if (!isValidPosition(row, col)) break;
-      if (board[row][col]) break;
-      
-      landingSquares.push({ row, col });
-    }
-  }
-  
-  return { landingSquares, capturedPiece: enemyPiece, capturePos };
-}
-
-function getPossibleCaptures(
-  piece: Piece,
-  board: BoardType,
-  capturedSoFar: Piece[] = [],
-  currentPos?: Position
-): PossibleMove[] {
-  const pos = currentPos || piece.position;
-  const captures: PossibleMove[] = [];
-  
-  const directions: [number, number][] = [
-    [-1, -1], [-1, 1], [1, -1], [1, 1]
-  ];
-
-  if (piece.type === 'king') {
-    for (const direction of directions) {
-      const { landingSquares, capturedPiece, capturePos } = getFlyingKingCaptures(
-        { ...piece, position: pos },
-        board,
-        direction,
-        capturedSoFar
-      );
-      
-      if (capturedPiece && capturePos) {
-        for (const landing of landingSquares) {
-          const tempBoard = board.map(row => [...row]);
-          tempBoard[pos.row][pos.col] = null;
-          tempBoard[capturePos.row][capturePos.col] = null;
-          tempBoard[landing.row][landing.col] = { ...piece, position: landing };
-          
-          const newCaptured = [...capturedSoFar, capturedPiece];
-          
-          const continuations = getPossibleCaptures(
-            { ...piece, position: landing },
-            tempBoard,
-            newCaptured,
-            landing
-          );
-          
-          captures.push({
-            position: landing,
-            isCapture: true,
-            capturedPieces: [capturedPiece],
-            continuations: continuations.length > 0 ? continuations : undefined
-          });
-        }
-      }
-    }
-  } else {
-    for (const [dRow, dCol] of directions) {
-      const jumpRow = pos.row + dRow * 2;
-      const jumpCol = pos.col + dCol * 2;
-      const midRow = pos.row + dRow;
-      const midCol = pos.col + dCol;
-      
-      if (isValidPosition(jumpRow, jumpCol) && isValidPosition(midRow, midCol)) {
-        const middlePiece = board[midRow][midCol];
-        const jumpSquare = board[jumpRow][jumpCol];
-        
-        if (middlePiece && 
-            middlePiece.color !== piece.color && 
-            !jumpSquare &&
-            !capturedSoFar.some(p => p.id === middlePiece.id)) {
-          
-          const tempBoard = board.map(row => [...row]);
-          tempBoard[pos.row][pos.col] = null;
-          tempBoard[midRow][midCol] = null;
-          tempBoard[jumpRow][jumpCol] = { ...piece, position: { row: jumpRow, col: jumpCol } };
-          
-          const newCaptured = [...capturedSoFar, middlePiece];
-          
-          const continuations = getPossibleCaptures(
-            { ...piece, position: { row: jumpRow, col: jumpCol } },
-            tempBoard,
-            newCaptured,
-            { row: jumpRow, col: jumpCol }
-          );
-          
-          captures.push({
-            position: { row: jumpRow, col: jumpCol },
-            isCapture: true,
-            capturedPieces: [middlePiece],
-            continuations: continuations.length > 0 ? continuations : undefined
-          });
-        }
-      }
-    }
-  }
-  
-  return captures;
-}
-
-function getNormalMoves(piece: Piece, board: BoardType): Position[] {
-  const moves: Position[] = [];
-  const { row, col } = piece.position;
-  
-  if (piece.type === 'king') {
-    const directions: [number, number][] = [
-      [-1, -1], [-1, 1], [1, -1], [1, 1]
-    ];
-    
-    for (const direction of directions) {
-      moves.push(...getFlyingKingSquares(piece, board, direction));
-    }
-  } else {
-    const forwardDir = piece.color === 'red' ? 1 : -1;
-    const forwardMoves: [number, number][] = [
-      [forwardDir, -1],
-      [forwardDir, 1]
-    ];
-    
-    for (const [dRow, dCol] of forwardMoves) {
-      const newRow = row + dRow;
-      const newCol = col + dCol;
-      
-      if (isValidPosition(newRow, newCol) && !board[newRow][newCol]) {
-        moves.push({ row: newRow, col: newCol });
-      }
-    }
-  }
-  
-  return moves;
-}
-
-function getAllMovesForPlayer(board: BoardType, player: PlayerColor): {
-  captures: Map<string, PossibleMove[]>;
-  normalMoves: Map<string, Position[]>;
-  mustCapture: boolean;
-} {
-  const captures = new Map<string, PossibleMove[]>();
-  const normalMoves = new Map<string, Position[]>();
-  
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (piece && piece.color === player) {
-        const possibleCaptures = getPossibleCaptures(piece, board);
-        if (possibleCaptures.length > 0) {
-          captures.set(piece.id, possibleCaptures);
-        }
-      }
-    }
-  }
-  
-  const mustCapture = captures.size > 0;
-  
-  if (!mustCapture) {
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        const piece = board[row][col];
-        if (piece && piece.color === player) {
-          const moves = getNormalMoves(piece, board);
-          if (moves.length > 0) {
-            normalMoves.set(piece.id, moves);
-          }
-        }
-      }
-    }
-  }
-  
-  return { captures, normalMoves, mustCapture };
-}
-
 // ============================================
 // BOARD EVALUATION
 // ============================================
 
 function evaluateBoard(board: BoardType, aiColor: PlayerColor): number {
   let score = 0;
-  const opponentColor: PlayerColor = aiColor === 'red' ? 'black' : 'red';
+  const opponentColor: PlayerColor = opponentOf(aiColor);
   
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
@@ -345,8 +109,8 @@ function evaluateBoard(board: BoardType, aiColor: PlayerColor): number {
   }
   
   // Mobility bonus (number of available moves)
-  const aiMoves = getAllMovesForPlayer(board, aiColor);
-  const opponentMoves = getAllMovesForPlayer(board, opponentColor);
+  const aiMoves = getAllValidMovesForPlayer(board, aiColor);
+  const opponentMoves = getAllValidMovesForPlayer(board, opponentColor);
   
   const aiMobility = aiMoves.captures.size + aiMoves.normalMoves.size;
   const opponentMobility = opponentMoves.captures.size + opponentMoves.normalMoves.size;
@@ -364,7 +128,7 @@ function evaluateBoard(board: BoardType, aiColor: PlayerColor): number {
 }
 
 function isPieceSafe(piece: Piece, board: BoardType): boolean {
-  const opponentColor: PlayerColor = piece.color === 'red' ? 'black' : 'red';
+  const opponentColor: PlayerColor = opponentOf(piece.color);
   
   // Check if any opponent piece can capture this piece
   for (let row = 0; row < 8; row++) {
@@ -419,8 +183,8 @@ function minimax(
     return evaluateBoard(board, aiColor);
   }
   
-  const currentPlayer = maximizingPlayer ? aiColor : (aiColor === 'red' ? 'black' : 'red');
-  const allMoves = getAllMovesForPlayer(board, currentPlayer);
+  const currentPlayer = maximizingPlayer ? aiColor : opponentOf(aiColor);
+  const allMoves = getAllValidMovesForPlayer(board, currentPlayer);
   
   // Check for game over (no moves available)
   if (allMoves.captures.size === 0 && allMoves.normalMoves.size === 0) {
@@ -510,18 +274,6 @@ function minimax(
 // HELPER FUNCTIONS
 // ============================================
 
-function findPieceById(board: BoardType, id: string): Piece | null {
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (piece && piece.id === id) {
-        return piece;
-      }
-    }
-  }
-  return null;
-}
-
 function collectAllCapturedInMove(captureMove: PossibleMove, targetPos: Position): Piece[] {
   const allCaptured: Piece[] = [];
   
@@ -548,34 +300,6 @@ function collectAllCapturedInMove(captureMove: PossibleMove, targetPos: Position
   return allCaptured;
 }
 
-function simulateMove(
-  board: BoardType,
-  piece: Piece,
-  newPosition: Position,
-  capturedPieces: Piece[]
-): BoardType {
-  const newBoard = board.map(row => [...row]);
-  
-  // Remove captured pieces
-  for (const captured of capturedPieces) {
-    newBoard[captured.position.row][captured.position.col] = null;
-  }
-  
-  // Move piece
-  const movedPiece: Piece = { ...piece, position: newPosition };
-  
-  // Check for king promotion
-  if ((movedPiece.color === 'red' && newPosition.row === 7) || 
-      (movedPiece.color === 'black' && newPosition.row === 0)) {
-    movedPiece.type = 'king';
-  }
-  
-  newBoard[piece.position.row][piece.position.col] = null;
-  newBoard[newPosition.row][newPosition.col] = movedPiece;
-  
-  return newBoard;
-}
-
 // ============================================
 // MAIN AI FUNCTION
 // ============================================
@@ -588,7 +312,7 @@ export function calculateAIMove(
   console.log(`[AI] Starting calculation for ${aiColor} at depth ${difficulty.depth}`);
   const startTime = Date.now();
   
-  const allMoves = getAllMovesForPlayer(board, aiColor);
+  const allMoves = getAllValidMovesForPlayer(board, aiColor);
   
   // No moves available
   if (allMoves.captures.size === 0 && allMoves.normalMoves.size === 0) {

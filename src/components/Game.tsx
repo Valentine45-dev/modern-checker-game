@@ -11,6 +11,17 @@ import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveCommen
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
 import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
+import {
+  createInitialBoard,
+  getPossibleCaptures,
+  getNormalMoves,
+  getAllValidMovesForPlayer,
+  flattenCaptureMoves,
+  findCaptureInTree,
+  positionsEqual,
+  promotionRow,
+  opponentOf,
+} from '../utils/rules';
 
 interface GameProps {
   onBackToMenu: () => void;
@@ -108,38 +119,8 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Initialize the board with pieces
   function initializeGame(): GameState {
-    const board: BoardType = Array(8).fill(null).map(() => Array(8).fill(null));
-    
-    // Place red pieces (top 3 rows)
-    let pieceId = 1;
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 8; col++) {
-        if ((row + col) % 2 === 1) {
-          board[row][col] = {
-            id: `red-${pieceId++}`,
-            color: 'red',
-            type: 'normal',
-            position: { row, col }
-          };
-        }
-      }
-    }
-    
-    // Place black pieces (bottom 3 rows)
-    pieceId = 1;
-    for (let row = 5; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        if ((row + col) % 2 === 1) {
-          board[row][col] = {
-            id: `black-${pieceId++}`,
-            color: 'black',
-            type: 'normal',
-            position: { row, col }
-          };
-        }
-      }
-    }
-    
+    const board: BoardType = createInitialBoard();
+
     // In AI mode, black (human) starts first. In PvP mode, red starts first.
     const startingPlayer: PlayerColor = isAIGame ? 'black' : 'red';
     
@@ -158,274 +139,6 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       playerTimers: { red: 300, black: 300 },
       turnStartTime: Date.now(),
     };
-  }
-
-  function isValidPosition(row: number, col: number): boolean {
-    return row >= 0 && row < 8 && col >= 0 && col < 8;
-  }
-
-  // Check if positions are equal
-  function positionsEqual(pos1: Position, pos2: Position): boolean {
-    return pos1.row === pos2.row && pos1.col === pos2.col;
-  }
-
-  // ============================================
-  // FLYING KING LOGIC
-  // ============================================
-  
-  // Get all squares a flying king can reach in one direction
-  function getFlyingKingSquares(
-    piece: Piece,
-    board: BoardType,
-    direction: [number, number]
-  ): Position[] {
-    const squares: Position[] = [];
-    const [dRow, dCol] = direction;
-    let { row, col } = piece.position;
-    
-    for (;;) {
-      row += dRow;
-      col += dCol;
-      
-      if (!isValidPosition(row, col)) break;
-      if (board[row][col]) break; // Blocked by a piece
-      
-      squares.push({ row, col });
-    }
-    
-    return squares;
-  }
-
-  // Get flying king capture moves in one direction
-  function getFlyingKingCaptures(
-    piece: Piece,
-    board: BoardType,
-    direction: [number, number],
-    capturedSoFar: Piece[] = []
-  ): { landingSquares: Position[]; capturedPiece: Piece | null; capturePos: Position | null } {
-    const [dRow, dCol] = direction;
-    let { row, col } = piece.position;
-    let enemyPiece: Piece | null = null;
-    let capturePos: Position | null = null;
-    
-    // Fly until we hit a piece
-    for (;;) {
-      row += dRow;
-      col += dCol;
-      
-      if (!isValidPosition(row, col)) break;
-      
-      const square = board[row][col];
-      if (square) {
-        // Check if it's an enemy piece and not already captured
-        if (square.color !== piece.color && 
-            !capturedSoFar.some(p => p.id === square.id)) {
-          enemyPiece = square;
-          capturePos = { row, col };
-        }
-        break;
-      }
-    }
-    
-    // If we found an enemy, continue flying past it to find landing squares
-    const landingSquares: Position[] = [];
-    if (enemyPiece && capturePos) {
-      row = capturePos.row;
-      col = capturePos.col;
-      
-      for (;;) {
-        row += dRow;
-        col += dCol;
-        
-        if (!isValidPosition(row, col)) break;
-        if (board[row][col]) break;
-        
-        landingSquares.push({ row, col });
-      }
-    }
-    
-    return { landingSquares, capturedPiece: enemyPiece, capturePos };
-  }
-
-  // ============================================
-  // MOVE CALCULATION - INTERNATIONAL RULES
-  // ============================================
-
-  // Calculate all possible captures for a piece (recursive for multi-jumps)
-  function getPossibleCaptures(
-    piece: Piece,
-    board: BoardType,
-    capturedSoFar: Piece[] = [],
-    currentPos?: Position
-  ): PossibleMove[] {
-    const pos = currentPos || piece.position;
-    const captures: PossibleMove[] = [];
-    
-    // All 4 diagonal directions (both forward and backward for captures)
-    const directions: [number, number][] = [
-      [-1, -1], [-1, 1], [1, -1], [1, 1]
-    ];
-
-    if (piece.type === 'king') {
-      // FLYING KING CAPTURES
-      for (const direction of directions) {
-        const { landingSquares, capturedPiece, capturePos } = getFlyingKingCaptures(
-          { ...piece, position: pos },
-          board,
-          direction,
-          capturedSoFar
-        );
-        
-        if (capturedPiece && capturePos) {
-          for (const landing of landingSquares) {
-            // Create temporary board for recursive checking
-            const tempBoard = board.map(row => [...row]);
-            tempBoard[pos.row][pos.col] = null;
-            tempBoard[capturePos.row][capturePos.col] = null;
-            tempBoard[landing.row][landing.col] = { ...piece, position: landing };
-            
-            const newCaptured = [...capturedSoFar, capturedPiece];
-            
-            // Check for continuation captures
-            const continuations = getPossibleCaptures(
-              { ...piece, position: landing },
-              tempBoard,
-              newCaptured,
-              landing
-            );
-            
-            captures.push({
-              position: landing,
-              isCapture: true,
-              capturedPieces: [capturedPiece],
-              continuations: continuations.length > 0 ? continuations : undefined
-            });
-          }
-        }
-      }
-    } else {
-      // NORMAL PIECE CAPTURES (can capture forward AND backward)
-      for (const [dRow, dCol] of directions) {
-        const jumpRow = pos.row + dRow * 2;
-        const jumpCol = pos.col + dCol * 2;
-        const midRow = pos.row + dRow;
-        const midCol = pos.col + dCol;
-        
-        if (isValidPosition(jumpRow, jumpCol) && isValidPosition(midRow, midCol)) {
-          const middlePiece = board[midRow][midCol];
-          const jumpSquare = board[jumpRow][jumpCol];
-          
-          if (middlePiece && 
-              middlePiece.color !== piece.color && 
-              !jumpSquare &&
-              !capturedSoFar.some(p => p.id === middlePiece.id)) {
-            
-            // Create temporary board
-            const tempBoard = board.map(row => [...row]);
-            tempBoard[pos.row][pos.col] = null;
-            tempBoard[midRow][midCol] = null;
-            tempBoard[jumpRow][jumpCol] = { ...piece, position: { row: jumpRow, col: jumpCol } };
-            
-            const newCaptured = [...capturedSoFar, middlePiece];
-            
-            // Check for continuation captures from the landing position
-            const continuations = getPossibleCaptures(
-              { ...piece, position: { row: jumpRow, col: jumpCol } },
-              tempBoard,
-              newCaptured,
-              { row: jumpRow, col: jumpCol }
-            );
-            
-            captures.push({
-              position: { row: jumpRow, col: jumpCol },
-              isCapture: true,
-              capturedPieces: [middlePiece],
-              continuations: continuations.length > 0 ? continuations : undefined
-            });
-          }
-        }
-      }
-    }
-    
-    return captures;
-  }
-
-  // Get normal (non-capture) moves for a piece
-  function getNormalMoves(piece: Piece, board: BoardType): Position[] {
-    const moves: Position[] = [];
-    const { row, col } = piece.position;
-    
-    if (piece.type === 'king') {
-      // FLYING KING - can move multiple squares in all 4 directions
-      const directions: [number, number][] = [
-        [-1, -1], [-1, 1], [1, -1], [1, 1]
-      ];
-      
-      for (const direction of directions) {
-        moves.push(...getFlyingKingSquares(piece, board, direction));
-      }
-    } else {
-      // NORMAL PIECE - only forward diagonal moves (one square)
-      const forwardDir = piece.color === 'red' ? 1 : -1;
-      const forwardMoves: [number, number][] = [
-        [forwardDir, -1],
-        [forwardDir, 1]
-      ];
-      
-      for (const [dRow, dCol] of forwardMoves) {
-        const newRow = row + dRow;
-        const newCol = col + dCol;
-        
-        if (isValidPosition(newRow, newCol) && !board[newRow][newCol]) {
-          moves.push({ row: newRow, col: newCol });
-        }
-      }
-    }
-    
-    return moves;
-  }
-
-  // Get all valid moves for current player (enforce mandatory capture)
-  function getAllValidMovesForPlayer(board: BoardType, player: PlayerColor): {
-    captures: Map<string, PossibleMove[]>;
-    normalMoves: Map<string, Position[]>;
-    mustCapture: boolean;
-  } {
-    const captures = new Map<string, PossibleMove[]>();
-    const normalMoves = new Map<string, Position[]>();
-    
-    // First, check all pieces for possible captures
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        const piece = board[row][col];
-        if (piece && piece.color === player) {
-          const possibleCaptures = getPossibleCaptures(piece, board);
-          if (possibleCaptures.length > 0) {
-            captures.set(piece.id, possibleCaptures);
-          }
-        }
-      }
-    }
-    
-    // If captures exist, they are mandatory
-    const mustCapture = captures.size > 0;
-    
-    // Only calculate normal moves if no captures are available
-    if (!mustCapture) {
-      for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
-          const piece = board[row][col];
-          if (piece && piece.color === player) {
-            const moves = getNormalMoves(piece, board);
-            if (moves.length > 0) {
-              normalMoves.set(piece.id, moves);
-            }
-          }
-        }
-      }
-    }
-    
-    return { captures, normalMoves, mustCapture };
   }
 
   // Get valid moves/captures for a specific piece
@@ -451,22 +164,6 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         mustCapture: false 
       };
     }
-  }
-
-  // Flatten capture tree to get all possible landing positions
-  function flattenCaptureMoves(captures: PossibleMove[]): Position[] {
-    const positions: Position[] = [];
-    
-    for (const capture of captures) {
-      positions.push(capture.position);
-      
-      // If there are continuations, recursively flatten them
-      if (capture.continuations && capture.continuations.length > 0) {
-        positions.push(...flattenCaptureMoves(capture.continuations));
-      }
-    }
-    
-    return positions;
   }
 
   // ============================================
@@ -607,20 +304,6 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     }
   }
 
-  // Find capture move in the tree
-  function findCaptureInTree(captures: PossibleMove[], targetPos: Position): PossibleMove | null {
-    for (const capture of captures) {
-      if (positionsEqual(capture.position, targetPos)) {
-        return capture;
-      }
-      if (capture.continuations) {
-        const found = findCaptureInTree(capture.continuations, targetPos);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
   // Execute a capture move
   function executeCapture(piece: Piece, newPosition: Position, captureMove: PossibleMove) {
     const newBoard = gameState.board.map(row => [...row]);
@@ -637,7 +320,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     
     // Check for king promotion
     const reachedBackRank =
-      (piece.color === 'red' && newRow === 7) || (piece.color === 'black' && newRow === 0);
+      newRow === promotionRow(piece.color);
     const becameKing = reachedBackRank && piece.type !== 'king';
 
     // Move the piece (promoting it in the same step, so the object is never mutated)
@@ -735,8 +418,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     
     // Check for king promotion
     let becameKing = false;
-    if ((movedPiece.color === 'red' && newRow === 7) || 
-        (movedPiece.color === 'black' && newRow === 0)) {
+    if (newRow === promotionRow(movedPiece.color)) {
       if (movedPiece.type !== 'king') {
         movedPiece.type = 'king';
         becameKing = true;
@@ -793,7 +475,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     const winner = checkWinCondition(newBoard, gameState.currentPlayer);
     
     // Switch player
-    const nextPlayer: PlayerColor = gameState.currentPlayer === 'red' ? 'black' : 'red';
+    const nextPlayer: PlayerColor = opponentOf(gameState.currentPlayer);
     
     // No turn-change toast: the "Current Player" card in the sidebar already
     // shows whose turn it is, and firing a toast for every single move was the
@@ -823,7 +505,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Check win condition
   function checkWinCondition(board: (Piece | null)[][], lastPlayer: PlayerColor): PlayerColor | undefined {
-    const opponentColor: PlayerColor = lastPlayer === 'red' ? 'black' : 'red';
+    const opponentColor: PlayerColor = opponentOf(lastPlayer);
     
     let opponentHasPieces = false;
     let opponentHasMoves = false;
@@ -879,10 +561,6 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     }
     
     setPiecesWithCaptures(capturesMap);
-    // getAllValidMovesForPlayer is re-created on every render, so listing it here
-    // would re-run this effect (and setState) on every render. The real fix is to
-    // move the rules out of this component into a stable module.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
 
     // Auto-save game state after each move
@@ -1118,7 +796,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Handle resign
   function handleResign() {
-    const winner: PlayerColor = gameState.currentPlayer === 'red' ? 'black' : 'red';
+    const winner: PlayerColor = opponentOf(gameState.currentPlayer);
     setGameState({
       ...gameState,
       gameStatus: 'finished',
