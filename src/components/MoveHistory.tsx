@@ -1,5 +1,6 @@
 import { Swords, Crown } from 'lucide-react';
 import { Move } from '../types';
+import { squareName } from '../utils/rules';
 
 interface MoveHistoryProps {
   moves: Move[];
@@ -9,10 +10,9 @@ interface MoveHistoryProps {
 const MoveHistory = ({ moves, maxDisplay = 5 }: MoveHistoryProps) => {
   const recentMoves = moves.slice(-maxDisplay).reverse();
 
-  const formatPosition = (row: number, col: number): string => {
-    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-    return `${cols[col]}${8 - row}`;
-  };
+  // Shared with the board's screen-reader labels, so a move reads the same way
+  // in the history as the square it landed on announces itself.
+  const formatPosition = squareName;
 
   return (
     <div className="bg-background-light/80 dark:bg-background-dark/90 backdrop-blur-sm p-4 rounded-xl border border-primary/20">

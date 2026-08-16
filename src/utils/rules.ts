@@ -30,6 +30,19 @@ export function opponentOf(color: PlayerColor): PlayerColor {
   return color === 'red' ? 'black' : 'red';
 }
 
+const FILES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+/** Board coordinate for a square, e.g. "C5". Used by the move list and by
+ *  screen-reader labels, so both describe the board the same way. */
+export function squareName(row: number, col: number): string {
+  return `${FILES[col] ?? '?'}${8 - row}`;
+}
+
+/** Only dark squares are playable in checkers. */
+export function isPlayableSquare(row: number, col: number): boolean {
+  return (row + col) % 2 === 1;
+}
+
 // ============================================
 // BOARD SETUP
 // ============================================
