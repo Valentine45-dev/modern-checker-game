@@ -63,6 +63,34 @@ Either interaction works, and both produce exactly the same result:
 
 ---
 
+## Playing with a keyboard
+
+The board is a single tab stop, not sixty-four. Tab to it, then:
+
+| Key | Action |
+| --- | --- |
+| Arrow keys | Move the cursor one square |
+| Enter or Space | Select a piece, then play a move |
+| Escape | Clear the selection |
+| Tab | Leave the board for the sidebar controls |
+
+Escape deliberately refuses part-way through a multi-jump, because the rest of a capture
+sequence is mandatory.
+
+Every square announces what it holds, so the board can be read without seeing it:
+
+```
+B6, red piece
+B6, red piece, selected
+A5, empty, available move
+B5, unplayable square
+```
+
+Known gap: there is no live region describing the opponent's move. A move raises a toast,
+which is announced, but it does not say which squares were involved.
+
+---
+
 ## The AI
 
 A minimax search with alpha-beta pruning over complete capture sequences.
@@ -112,9 +140,12 @@ weights have not been tuned against play.
 ## Features
 
 - Local two-player mode and three AI difficulties
+- Full keyboard play, with every square labelled for screen readers
 - Four board themes (Classic Wood, Modern Glass, Marble, Neon) and four piece styles
 - Synthesised sound effects via the Web Audio API, with volume control
-- Move history, capture counters, king-promotion counters and per-player clocks
+- Move history, capture counters and king-promotion counters
+- Optional match clock: five minutes each, losing on time, off by default. It stops while
+  the tab is hidden, so switching away mid-turn costs nothing
 - Automatic save to `localStorage` and resume from the main menu
 - Move hints and mandatory-capture indicators, both toggleable
 - In-game rules reference
@@ -165,7 +196,7 @@ also free of React and DOM references, which is what allows the AI to run in a w
 npm test
 ```
 
-45 tests across three files, covering the rules, the capture-path resolution shared by the
+49 tests across three files, covering the rules, the capture-path resolution shared by the
 UI and the AI, and the AI's behaviour:
 
 - Move generation, mandatory capture, flying kings, backward capture, promotion
@@ -173,6 +204,8 @@ UI and the AI, and the AI's behaviour:
   never captured twice in one sequence
 - Step-by-step and direct-to-final-square capture producing identical boards
 - Rejection of illegal shortcuts
+- Win detection: an empty side, a blocked side, and the distinction between the player to
+  move and the player who just moved
 - Deeper search never scoring worse than shallower search against a fixed opponent
 - Hard beating Easy, and Easy losing to Medium, over seeded matches
 
@@ -193,10 +226,15 @@ Visible in the UI but not functional:
 
 - **Undo** — the control exists but is disabled.
 - **Game statistics** — the Settings panel shows placeholder zeroes.
-- **Clocks** — they count down but running out has no consequence.
 
-Other known gaps: the board is mouse-only and not yet keyboard accessible, and saved games
-are not schema-versioned.
+Other known gaps:
+
+- No live region announcing the opponent's move, so a screen reader hears that a move
+  happened but not where.
+- Saved games are not schema-versioned, so a save written by an older build restores
+  unchecked.
+- The AI's positional evaluation weights have never been tuned against play; only the
+  search around them has been.
 
 ---
 
