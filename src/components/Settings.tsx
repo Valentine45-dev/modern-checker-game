@@ -3,14 +3,23 @@ import { Volume2, Palette, Gamepad2, Monitor, Database, BarChart3, ArrowLeft } f
 import { GameSettings, getGameSettings, saveGameSettings, resetGameSettings, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
 import { clearOwnedStorage } from '../utils/gamePersistence';
+import { AI_MODES, AIGameMode, getGameStats, resetGameStats, summarise } from '../utils/gameStats';
 import { useToast } from './toastContext';
 
 interface SettingsProps {
   onBack: () => void;
 }
 
+const AI_MODE_LABELS: Record<AIGameMode, string> = {
+  'ai-easy': 'vs AI (Easy)',
+  'ai-medium': 'vs AI (Medium)',
+  'ai-hard': 'vs AI (Hard)',
+};
+
 const Settings: React.FC<SettingsProps> = ({ onBack }) => {
   const [settings, setSettings] = useState<GameSettings>(getGameSettings());
+  const [stats, setStats] = useState(getGameStats);
+  const summary = summarise(stats);
   const { addConfirmDialog } = useToast();
 
   // Load settings from localStorage on mount
@@ -36,6 +45,19 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
   const resetToDefaults = () => {
     resetGameSettings();
     setSettings(getGameSettings());
+  };
+
+  const resetStats = () => {
+    addConfirmDialog({
+      message: 'Reset statistics?',
+      description: 'Your win/loss record is deleted. Saved games and settings are untouched.',
+      confirmText: 'Reset statistics',
+      cancelText: 'Cancel',
+      onConfirm: () => {
+        resetGameStats();
+        setStats(getGameStats());
+      },
+    });
   };
 
   const clearAllData = () => {
@@ -241,6 +263,22 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                   </label>
                 </div>
 
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Undo Moves</h3>
+                    <p className="text-gray-300 text-sm">Show an Undo button during play. Against the AI it takes back your move and the AI's reply. Off by default, since taking moves back changes what a win is worth.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.undoEnabled}
+                      onChange={(e) => handleSettingChange('undoEnabled', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                  </label>
+                </div>
+
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Default AI Difficulty</label>
@@ -356,23 +394,64 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
               Game Statistics
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
+              {/* Wins are counted for AI games only, and the labels say so.
+                  In PvP both sides are played on this device, so crediting a
+                  "win" there would make the rate meaningless. */}
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary mb-2">0</div>
+                  <div className="text-3xl font-bold text-primary mb-2">{summary.gamesPlayed}</div>
                   <div className="text-sm text-gray-300">Games Played</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary mb-2">0</div>
-                  <div className="text-sm text-gray-300">Games Won</div>
+                  <div className="text-3xl font-bold text-primary mb-2">{summary.aiWon}</div>
+                  <div className="text-sm text-gray-300">Wins vs AI</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary mb-2">0%</div>
-                  <div className="text-sm text-gray-300">Win Rate</div>
+                  <div className="text-3xl font-bold text-primary mb-2">
+                    {/* An em dash, not 0% — nobody has lost every game they
+                        never played. */}
+                    {summary.winRate === null ? '—' : `${summary.winRate}%`}
+                  </div>
+                  <div className="text-sm text-gray-300">Win Rate vs AI</div>
                 </div>
               </div>
-              <div className="mt-4 text-center">
-                <p className="text-sm text-gray-400">Statistics tracking coming soon!</p>
-              </div>
+
+              {summary.gamesPlayed === 0 ? (
+                <p className="mt-6 text-center text-sm text-gray-400">
+                  No finished games yet. Play one and it will show up here.
+                </p>
+              ) : (
+                <div className="mt-6 pt-6 border-t border-primary/20">
+                  <h3 className="text-sm font-semibold text-gray-300 mb-3">By game mode</h3>
+                  <ul className="space-y-2">
+                    {AI_MODES.map((mode) => (
+                      <li key={mode} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-300">{AI_MODE_LABELS[mode]}</span>
+                        <span className="text-gray-400">
+                          {stats.ai[mode].played === 0
+                            ? 'not played'
+                            : `${stats.ai[mode].won} won of ${stats.ai[mode].played}`}
+                        </span>
+                      </li>
+                    ))}
+                    <li className="flex items-center justify-between text-sm">
+                      <span className="text-gray-300">Two players</span>
+                      <span className="text-gray-400">
+                        {stats.pvpPlayed === 0
+                          ? 'not played'
+                          : `${stats.pvpPlayed} played`}
+                      </span>
+                    </li>
+                  </ul>
+
+                  <button
+                    onClick={resetStats}
+                    className="mt-6 w-full px-4 py-2 bg-primary/15 hover:bg-primary/25 text-gray-200 border border-primary/30 rounded-lg transition-all duration-200"
+                  >
+                    Reset Statistics
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         </div>

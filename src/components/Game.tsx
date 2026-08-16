@@ -12,6 +12,7 @@ import { AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment } from '../util
 import { requestAIMove } from '../utils/aiClient';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
 import { capturedLabel } from '../utils/labels';
+import { recordGameResult } from '../utils/gameStats';
 import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
 import {
@@ -31,6 +32,37 @@ interface GameProps {
   onBackToMenuAfterQuit?: () => void;
   onGameQuit?: () => void;
   gameMode: GameMode;
+}
+
+/**
+ * The game as it stood before one completed turn.
+ *
+ * Undo restores a snapshot rather than replaying the move backwards. Reversing a
+ * checkers turn by hand means un-promoting a king, resurrecting every piece a
+ * chain took and restoring each one's type — several places to get subtly wrong,
+ * all of which a snapshot gets right for free.
+ */
+interface TurnSnapshot {
+  gameState: GameState;
+  turnNumber: number;
+  kingsPromoted: { red: number; black: number };
+}
+
+/** Undo depth. Snapshots are whole boards, so the stack is not unbounded. */
+const MAX_UNDO_DEPTH = 30;
+
+/** Snapshot the pieces too: restoring must not hand back a shared object. */
+function cloneSnapshotState(state: GameState): GameState {
+  return {
+    ...state,
+    board: state.board.map(row => row.map(square => (square ? { ...square } : null))),
+    moveHistory: [...state.moveHistory],
+    score: { ...state.score },
+    playerTimers: state.playerTimers ? { ...state.playerTimers } : undefined,
+    selectedPiece: null,
+    validMoves: [],
+    possibleCaptures: [],
+  };
 }
 
 const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: GameProps) => {
@@ -56,7 +88,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     const savedState = loadGameState();
     return savedState?.turnNumber || 1;
   });
-  const [gameStartTime] = useState(() => {
+  // Doubles as the game's identity for statistics, so it must change when a new
+  // game starts and survive a resume.
+  const [gameStartTime, setGameStartTime] = useState(() => {
     const savedState = loadGameState();
     return savedState?.gameStartTime || Date.now();
   });
@@ -83,6 +117,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     const savedState = loadGameState();
     return savedState?.chainOrigin || null;
   });
+  // One entry per completed turn, holding the position as it stood *before* that
+  // turn. Deliberately not persisted: a snapshot is a whole board, and writing a
+  // stack of them to localStorage on every move would dwarf the saved game
+  // itself. Undo is therefore available for the current session only — the
+  // button simply isn't offered after a resume until you move again.
+  const [undoStack, setUndoStack] = useState<TurnSnapshot[]>([]);
   const [aiThinking, setAiThinking] = useState(false);
   const [aiThinkingMessage, setAiThinkingMessage] = useState('');
   // Remaining hops of the capture chain the search picked, so the UI replays
@@ -346,6 +386,107 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     executeMoveOrCapture(gameState.selectedPiece, position);
   }
 
+  /**
+   * Record the position before a turn begins.
+   *
+   * Guarded on `multiJumpInProgress` because the hops of a capture chain are one
+   * turn: snapshotting each hop would make Undo step backwards through a
+   * half-finished jump and leave the board in a state the rules forbid.
+   */
+  function pushUndoSnapshot() {
+    if (multiJumpInProgress) return;
+
+    const snapshot: TurnSnapshot = {
+      gameState: cloneSnapshotState(gameStateRef.current),
+      turnNumber,
+      kingsPromoted,
+    };
+
+    setUndoStack(prev => [...prev, snapshot].slice(-MAX_UNDO_DEPTH));
+  }
+
+  /**
+   * Take back the last move.
+   *
+   * Against the AI this rewinds two plies, not one. Undoing a single ply would
+   * hand the turn straight back to the AI, which would simply move again — the
+   * player would watch the board change and never get their decision back.
+   * Rewinding to the last position where it was the human's turn is what "undo
+   * my move" means.
+   */
+  function handleUndo() {
+    if (!gameSettings.undoEnabled) return;
+
+    if (aiThinking) {
+      addToast({
+        type: 'info',
+        message: 'AI is thinking...',
+        description: 'Wait for the move to land before taking it back.',
+        duration: 2000,
+      });
+      return;
+    }
+
+    if (multiJumpInProgress) {
+      addToast({
+        type: 'info',
+        message: 'Finish the capture first',
+        description: 'A jump that has started has to be completed before it can be undone.',
+        duration: 2500,
+      });
+      return;
+    }
+
+    const target = undoTargetIndex();
+    if (target < 0) return;
+
+    const snapshot = undoStack[target];
+    setUndoStack(undoStack.slice(0, target));
+
+    setGameState({
+      ...cloneSnapshotState(snapshot.gameState),
+      // The clock should not charge anyone for the time spent deciding to undo.
+      turnStartTime: Date.now(),
+    });
+    setTurnNumber(snapshot.turnNumber);
+    setKingsPromoted(snapshot.kingsPromoted);
+    setMultiJumpInProgress(false);
+    setCurrentJumpPiece(null);
+    setAccumulatedCaptures([]);
+    setChainOrigin(null);
+    setAiPlannedPath([]);
+    setClockNow(Date.now());
+
+    addToast({
+      type: 'info',
+      message: 'Move taken back',
+      description: isAIGame ? 'Your move and the AI\'s reply were undone.' : 'The last move was undone.',
+      duration: 2500,
+    });
+  }
+
+  /**
+   * Index of the snapshot Undo would restore, or -1 if there is nothing to take
+   * back. In an AI game that is the most recent position where the human was to
+   * move; in PvP it is simply the previous turn.
+   */
+  function undoTargetIndex(): number {
+    if (gameState.gameStatus !== 'playing') return -1;
+    if (!isAIGame) return undoStack.length - 1;
+
+    const humanColor = opponentOf(aiColor);
+    for (let i = undoStack.length - 1; i >= 0; i--) {
+      if (undoStack[i].gameState.currentPlayer === humanColor) return i;
+    }
+    return -1;
+  }
+
+  const canUndo =
+    gameSettings.undoEnabled &&
+    !aiThinking &&
+    !multiJumpInProgress &&
+    undoTargetIndex() >= 0;
+
   // Execute move or capture
   function executeMoveOrCapture(piece: Piece, newPosition: Position) {
     const resolved = resolveCapturePath(gameState.possibleCaptures, piece, newPosition);
@@ -366,6 +507,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
    * the whole distance while removing only the last victim.
    */
   function executeCapture(piece: Piece, newPosition: Position, resolved: ResolvedCapturePath) {
+    // No-op for the second and later hops of a chain — one snapshot per turn.
+    pushUndoSnapshot();
+
     const newBoard = gameState.board.map(row => [...row]);
     const { row: oldRow, col: oldCol } = piece.position;
     const { row: newRow, col: newCol } = newPosition;
@@ -473,6 +617,8 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Execute a normal move
   function executeNormalMove(piece: Piece, newPosition: Position) {
+    pushUndoSnapshot();
+
     const newBoard = gameState.board.map(row => [...row]);
     const { row: oldRow, col: oldCol } = piece.position;
     const { row: newRow, col: newCol } = newPosition;
@@ -615,6 +761,27 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     setGameState(prev => ({ ...prev, gameStatus: 'finished', winner }));
     clearGameState();
   }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
+
+  /**
+   * Fold a finished game into the lifetime statistics.
+   *
+   * Placed here rather than in the individual ending paths because there are
+   * four of them — a move that ends the game, the stuck-position safety net,
+   * resigning, and the clock running out — and every one of them has to count.
+   * `gameStartTime` identifies the game, and `recordGameResult` ignores a repeat,
+   * so a re-run of this effect (StrictMode double-invokes it in development)
+   * cannot inflate the totals.
+   */
+  useEffect(() => {
+    if (gameState.gameStatus !== 'finished' || !gameState.winner) return;
+
+    recordGameResult({
+      gameId: gameStartTime,
+      mode: actualGameMode,
+      winner: gameState.winner,
+      humanColor: isAIGame ? opponentOf(aiColor) : null,
+    });
+  }, [gameState.gameStatus, gameState.winner, gameStartTime, actualGameMode, isAIGame, aiColor]);
 
   // Hold the game-over modal back so the final move is visible first.
   useEffect(() => {
@@ -975,6 +1142,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     
     setGameState(initializeGame());
     setClockNow(Date.now());
+    // A rematch is a new game, so its duration and its statistics entry both
+    // have to start from here. This used to stay fixed for the life of the
+    // component, which made the game-over modal report a rematch as having
+    // taken from the start of the *first* game.
+    setGameStartTime(Date.now());
+    setUndoStack([]);
     setTurnNumber(1);
     setKingsPromoted({ red: 0, black: 0 });
     setMultiJumpInProgress(false);
@@ -1131,7 +1304,8 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             onNewGame={handleNewGame} 
             onResign={handleResign} 
             onQuit={handleQuit}
-            canUndo={false} 
+            onUndo={handleUndo}
+            canUndo={canUndo}
           />
           
           <button

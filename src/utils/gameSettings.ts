@@ -8,6 +8,12 @@ export interface GameSettings {
   autoSave: boolean;
   /** Off by default: a chess clock is a strong default for a casual game. */
   timerEnabled: boolean;
+  /**
+   * Off by default. Taking moves back changes what a game is worth — against
+   * the AI it turns any loss into a retry — so it is something a player opts
+   * into rather than something the game assumes.
+   */
+  undoEnabled: boolean;
   showMoveHints: boolean;
   showCaptures: boolean;
   aiDifficulty: 'easy' | 'medium' | 'hard';
@@ -23,6 +29,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   pieceStyle: 'standard',
   autoSave: true,
   timerEnabled: false,
+  undoEnabled: false,
   showMoveHints: true,
   showCaptures: true,
   aiDifficulty: 'medium',

@@ -1,5 +1,6 @@
 import { GameState, Piece, Position } from '../types';
 import { getGameSettings, SETTINGS_KEY } from './gameSettings';
+import { STATS_KEY } from './gameStats';
 
 const GAME_STATE_KEY = 'checkers-game-state';
 
@@ -195,7 +196,7 @@ export function getSavedGameMode(): string | null {
  * origin, so anything not on this list belongs to somebody else and must be left
  * alone.
  */
-export const OWNED_STORAGE_KEYS = [GAME_STATE_KEY, SETTINGS_KEY] as const;
+export const OWNED_STORAGE_KEYS = [GAME_STATE_KEY, SETTINGS_KEY, STATS_KEY] as const;
 
 /**
  * Clear the saved game, keeping user preferences.
