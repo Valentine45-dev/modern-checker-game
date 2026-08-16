@@ -13,9 +13,11 @@ interface GameInfoProps {
     black: number;
   };
   gameMode?: GameMode;
+  /** The clock is opt-in; hide the card entirely when it is off. */
+  showTimer?: boolean;
 }
 
-const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode = 'pvp' }: GameInfoProps) => {
+const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode = 'pvp', showTimer = true }: GameInfoProps) => {
   const isAIGame = gameMode !== 'pvp';
   
   const MODE_LABELS: Record<GameMode, { Icon: typeof Users; label: string }> = {
@@ -115,6 +117,7 @@ const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode =
       </div>
 
       {/* Timer Card */}
+      {showTimer && (
       <div className="bg-background-light/80 dark:bg-background-dark/90 backdrop-blur-sm p-4 rounded-xl border border-primary/20">
         <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-3">Timer</h3>
         <div className="space-y-2">
@@ -140,6 +143,7 @@ const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode =
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };

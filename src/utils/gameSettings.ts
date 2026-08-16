@@ -6,6 +6,8 @@ export interface GameSettings {
   boardTheme: 'classic' | 'modern' | 'marble' | 'neon';
   pieceStyle: 'standard' | 'minimal' | 'detailed' | 'retro';
   autoSave: boolean;
+  /** Off by default: a chess clock is a strong default for a casual game. */
+  timerEnabled: boolean;
   showMoveHints: boolean;
   showCaptures: boolean;
   aiDifficulty: 'easy' | 'medium' | 'hard';
@@ -20,6 +22,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   boardTheme: 'classic',
   pieceStyle: 'standard',
   autoSave: true,
+  timerEnabled: false,
   showMoveHints: true,
   showCaptures: true,
   aiDifficulty: 'medium',

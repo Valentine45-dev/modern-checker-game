@@ -709,19 +709,62 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   // correct regardless of how the interval happens to line up. The interval below
   // only exists to re-render the display.
 
+  const timerEnabled = gameSettings.timerEnabled;
+
   const [clockNow, setClockNow] = useState(() => Date.now());
+  // Hidden tab means the player is not looking at the board, so the clock stops.
+  const [clockPaused, setClockPaused] = useState(() => document.hidden);
 
   useEffect(() => {
-    if (gameState.gameStatus !== 'playing') return;
+    if (!timerEnabled || gameState.gameStatus !== 'playing') return;
     const interval = setInterval(() => setClockNow(Date.now()), 250);
     return () => clearInterval(interval);
-  }, [gameState.gameStatus]);
+  }, [timerEnabled, gameState.gameStatus]);
 
   // A resumed game should not be charged for the time the tab was closed.
   useEffect(() => {
     setGameState(prev => ({ ...prev, turnStartTime: Date.now() }));
     setClockNow(Date.now());
   }, []);
+
+  /**
+   * Stop the clock while the tab is hidden.
+   *
+   * Otherwise switching tabs mid-turn quietly drains your time and you come back
+   * to a game you lost without playing a move. On hide, whatever the turn has
+   * cost so far is banked and the clock freezes; on show, measurement restarts
+   * from that moment, so the hidden stretch is never charged.
+   */
+  useEffect(() => {
+    if (!timerEnabled) return;
+
+    const handleVisibilityChange = () => {
+      const now = Date.now();
+
+      if (document.hidden) {
+        setGameState(prev => {
+          if (!prev.playerTimers || prev.gameStatus !== 'playing') return prev;
+          const spent = Math.max(0, (now - (prev.turnStartTime ?? now)) / 1000);
+          return {
+            ...prev,
+            playerTimers: {
+              ...prev.playerTimers,
+              [prev.currentPlayer]: Math.max(0, prev.playerTimers[prev.currentPlayer] - spent),
+            },
+            turnStartTime: now,
+          };
+        });
+        setClockPaused(true);
+      } else {
+        setGameState(prev => ({ ...prev, turnStartTime: now }));
+        setClockNow(now);
+        setClockPaused(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [timerEnabled]);
 
   /**
    * Seconds the current turn has been running, kept fractional.
@@ -739,7 +782,8 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   /** Exact time left for a player, counting the turn in progress. */
   function remainingExact(color: PlayerColor): number {
     const banked = gameState.playerTimers?.[color] ?? 0;
-    if (color !== gameState.currentPlayer || gameState.gameStatus !== 'playing') {
+    // Paused, not this player's turn, or the game is over: nothing is accruing.
+    if (clockPaused || color !== gameState.currentPlayer || gameState.gameStatus !== 'playing') {
       return banked;
     }
     return banked - elapsedThisTurn(clockNow);
@@ -752,6 +796,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Running out of time now actually loses the game.
   useEffect(() => {
+    if (!timerEnabled || clockPaused) return;
     if (gameState.gameStatus !== 'playing' || !gameState.playerTimers) return;
     if (remainingExact(gameState.currentPlayer) > 0) return;
 
@@ -774,7 +819,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       duration: 5000,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clockNow, gameState.gameStatus, gameState.currentPlayer]);
+  }, [clockNow, clockPaused, timerEnabled, gameState.gameStatus, gameState.currentPlayer]);
 
   // AI Move Logic
   useEffect(() => {
@@ -1076,6 +1121,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             turnNumber={turnNumber}
             capturedPieces={gameState.score}
             timer={{ red: remainingSeconds('red'), black: remainingSeconds('black') }}
+            showTimer={timerEnabled}
             gameMode={actualGameMode}
           />
           
