@@ -7,7 +7,8 @@ import Controls from './Controls';
 import MoveHistory from './MoveHistory';
 import { ToastOutlet } from './ToastNotification';
 import { useToast } from './toastContext';
-import { calculateAIMove, AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment } from '../utils/aiEngine';
+import { AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment } from '../utils/aiEngine';
+import { requestAIMove } from '../utils/aiClient';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
 import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
@@ -659,19 +660,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
       // Adjust AI thinking time based on settings
       const adjustedThinkingTime = getAIThinkingTime(
-        difficulty.thinkingTime, 
-        gameSettings.aiDifficulty, 
+        difficulty.thinkingTime,
         gameSettings.gameSpeed
       );
-
-    console.log('AI Move Logic Triggered', {
-      isAITurn,
-      isAIMultiJump,
-      currentPlayer: gameState.currentPlayer,
-      aiColor,
-      multiJumpInProgress,
-      currentJumpPiece: currentJumpPiece?.id
-    });
 
     // Show thinking state. No toast here on purpose — the board already renders
     // an "AI is thinking..." banner, and a toast saying the same thing was just
@@ -679,13 +670,18 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     setAiThinking(true);
     setAiThinkingMessage(getAIThinkingMessage(actualGameMode));
 
-    // Calculate and execute AI move after thinking time
-    const timer = setTimeout(() => {
-      try {
-        console.log('🤖 setTimeout executing...');
+    // Cancelled if the effect re-runs (new turn, unmount) before we finish, so a
+    // stale worker reply can never be applied to a board that has moved on.
+    let cancelled = false;
+    const pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+    (async () => {
+      try {
         // ----- continuing a chain the search already chose -----
         if (isAIMultiJump && currentJumpPiece) {
+          await pause(adjustedThinkingTime);
+          if (cancelled) return;
+
           const nextHop = aiPlannedPath[0];
           const { captures } = getValidMovesForPiece(currentJumpPiece);
 
@@ -701,7 +697,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             executeCapture(currentJumpPiece, planned.node.position, planned);
             playSound(() => soundManager.playAIMoveSound());
           } else {
-            console.error('🤖 AI multi-jump lost its planned path');
+            console.error('AI multi-jump lost its planned path');
             setMultiJumpInProgress(false);
             setCurrentJumpPiece(null);
             setAiPlannedPath([]);
@@ -711,19 +707,24 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         }
 
         // ----- a fresh turn -----
-        console.log('🤖 AI calculating normal move, difficulty:', difficulty);
-        const aiMove = calculateAIMove(gameState.board, aiColor, difficulty);
-        console.log('🤖 AI calculated move:', aiMove);
+        // The search runs on a worker thread while the thinking delay elapses,
+        // so the wait the player already sees absorbs the computation instead of
+        // the two adding up.
+        const [aiMove] = await Promise.all([
+          requestAIMove(gameState.board, aiColor, difficulty),
+          pause(adjustedThinkingTime),
+        ]);
+        if (cancelled) return;
 
         if (!aiMove) {
-          console.error('🤖 AI could not calculate a move!');
+          console.error('AI could not calculate a move');
           setAiThinking(false);
           return;
         }
 
         const piece = gameState.board[aiMove.move.from.row][aiMove.move.from.col];
         if (!piece) {
-          console.error('🤖 AI piece not found on board at position:', aiMove.move.from);
+          console.error('AI piece not found on board at position:', aiMove.move.from);
           setAiThinking(false);
           return;
         }
@@ -737,7 +738,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           if (resolved) {
             executeCapture(piece, resolved.node.position, resolved);
           } else {
-            console.error('🤖 AI planned a capture the board does not offer', firstHop);
+            console.error('AI planned a capture the board does not offer', firstHop);
             setAiThinking(false);
             return;
           }
@@ -751,23 +752,25 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           actualGameMode
         );
         setTimeout(() => {
-          addToast({
-            type: 'success',
-            message: 'AI Move',
-            description: comment,
-            duration: 3000,
-          });
+          if (!cancelled) {
+            addToast({
+              type: 'success',
+              message: 'AI Move',
+              description: comment,
+              duration: 3000,
+            });
+          }
         }, 300);
 
         playSound(() => soundManager.playAIMoveSound());
         setAiThinking(false);
       } catch (error) {
-        console.error('🤖 AI Error:', error);
+        console.error('AI Error:', error);
         setAiThinking(false);
       }
-      }, adjustedThinkingTime);
+    })();
 
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; };
   // aiPlannedPath has to be here: during a chain, multiJumpInProgress stays
   // true from the second hop onwards, so without a dependency that actually
   // changes each hop this effect never re-fires and the AI freezes mid-chain

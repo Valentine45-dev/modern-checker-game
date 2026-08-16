@@ -69,11 +69,27 @@ export const GAME_SPEED_MULTIPLIERS = {
   fast: 0.5
 };
 
-// AI thinking time adjustments based on difficulty and speed
-export function getAIThinkingTime(baseTime: number, difficulty: string, speed: string): number {
+/**
+ * How long to pause before the AI's move appears.
+ *
+ * This used to also be scaled by the saved `aiDifficulty` setting, which was the
+ * only thing that setting did — so a player who set Settings to Hard and then
+ * started an Easy game got Easy, very slightly slower, while the UI implied the
+ * AI had been made stronger. Difficulty comes from the game mode; this is purely
+ * pacing.
+ */
+export function getAIThinkingTime(baseTime: number, speed: string): number {
   const speedMultiplier = GAME_SPEED_MULTIPLIERS[speed as keyof typeof GAME_SPEED_MULTIPLIERS] || 1.0;
-  const difficultyMultiplier = difficulty === 'easy' ? 0.7 : difficulty === 'hard' ? 1.3 : 1.0;
-  return Math.round(baseTime * speedMultiplier * difficultyMultiplier);
+  return Math.round(baseTime * speedMultiplier);
+}
+
+/** The game mode matching the saved default-difficulty preference. */
+export function getDefaultAIGameMode(): 'ai-easy' | 'ai-medium' | 'ai-hard' {
+  switch (getGameSettings().aiDifficulty) {
+    case 'easy': return 'ai-easy';
+    case 'hard': return 'ai-hard';
+    default: return 'ai-medium';
+  }
 }
 
 // Animation duration adjustments

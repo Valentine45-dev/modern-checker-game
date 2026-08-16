@@ -30,15 +30,17 @@ export interface AIDifficulty {
  * engine each rung scores strictly better than the one below it, and Hard beats
  * a correct engine searching to its own depth.
  *
- * Depth 6 costs ~37ms mean and ~118ms worst case headless, and the worst single
- * blocking task measured in the browser over a real game is ~114ms — which
- * lands while the thinking banner is already showing.
+ * Hard runs at depth 7, which beats a correct engine searching to its own depth
+ * 7 and scores 100% against a depth-6 one (depth 6 manages 75%).
  *
- * Depth 7 is tempting: it beats a correct engine searching to its own depth,
- * and headless timings suggested 175ms worst case. The browser disagreed —
- * 466ms worst, with two tasks over 200ms in one game. Node under-predicts the
- * browser here, so depth 7 waits for the search to move into a Web Worker
- * rather than shipping a visible stall.
+ * Depth 7 was rejected once already: on the main thread it stalled the browser
+ * for 466ms per move, even though headless timings suggested 175ms. It is
+ * affordable now only because the search runs in a Web Worker, so its cost no
+ * longer lands on the thread that paints the board — and because it overlaps
+ * with the thinking delay the player is already waiting through.
+ *
+ * Anything deeper should be justified by measuring in the browser, not headless.
+ * Node under-predicted the real cost by roughly 2.7x last time.
  *
  * Previously this table read easy:1, medium:3, hard:2 — Hard searched
  * SHALLOWER than Medium, while the README documented 2/3/4.
@@ -57,7 +59,7 @@ export const AI_DIFFICULTIES: Record<string, AIDifficulty> = {
     blunderRate: 0.08,
   },
   'ai-hard': {
-    depth: 6,
+    depth: 7,
     thinkingTime: 900,
     randomness: 0,
     blunderRate: 0,

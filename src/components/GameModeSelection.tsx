@@ -1,5 +1,6 @@
-import { Users, Bot, Brain, Flame, ArrowLeft } from 'lucide-react';
+import { Users, Bot, Brain, Flame, ArrowLeft, Star } from 'lucide-react';
 import { GameMode } from '../types';
+import { getDefaultAIGameMode } from '../utils/gameSettings';
 
 interface GameModeSelectionProps {
   onSelectMode: (mode: GameMode) => void;
@@ -7,6 +8,11 @@ interface GameModeSelectionProps {
 }
 
 const GameModeSelection = ({ onSelectMode, onBack }: GameModeSelectionProps) => {
+  // Settings' "Default AI Difficulty" now actually points at something. It used
+  // to only scale the AI's thinking delay, which meant the dropdown implied a
+  // strength change it never made.
+  const defaultAIMode = getDefaultAIGameMode();
+
   const gameModes = [
     {
       id: 'pvp' as GameMode,
@@ -57,13 +63,22 @@ const GameModeSelection = ({ onSelectMode, onBack }: GameModeSelectionProps) => 
             <button
               key={mode.id}
               onClick={() => onSelectMode(mode.id)}
-              className={`group relative overflow-hidden rounded-2xl p-8 bg-gradient-to-br ${mode.gradient} 
+              autoFocus={mode.id === defaultAIMode}
+              className={`group relative overflow-hidden rounded-2xl p-8 bg-gradient-to-br ${mode.gradient}
                          hover:scale-105 transition-all duration-300 transform hover:shadow-2xl
-                         focus:outline-none focus:ring-4 focus:ring-white/30`}
+                         focus:outline-none focus:ring-4 focus:ring-white/30
+                         ${mode.id === defaultAIMode ? 'ring-4 ring-white/60' : ''}`}
             >
               {/* Background Pattern */}
               <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors duration-300" />
-              
+
+              {mode.id === defaultAIMode && (
+                <span className="absolute top-3 right-3 z-20 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                  <Star className="w-3 h-3" aria-hidden="true" />
+                  Default
+                </span>
+              )}
+
               {/* Content */}
               <div className="relative z-10 text-center">
                 <div className="mb-4 flex justify-center group-hover:scale-110 transition-transform duration-300">

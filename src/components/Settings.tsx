@@ -214,6 +214,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Default AI Difficulty</label>
+                    <p className="text-xs text-gray-400 mb-2">Pre-selected when you choose a game mode</p>
                     <select
                       value={settings.aiDifficulty}
                       onChange={(e) => handleSettingChange('aiDifficulty', e.target.value as GameSettings['aiDifficulty'])}
