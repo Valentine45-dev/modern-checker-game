@@ -754,8 +754,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       }, adjustedThinkingTime);
 
     return () => clearTimeout(timer);
+  // aiPlannedPath has to be here: during a chain, multiJumpInProgress stays
+  // true from the second hop onwards, so without a dependency that actually
+  // changes each hop this effect never re-fires and the AI freezes mid-chain
+  // (2-hop chains finished by luck; 3+ hung).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
+  }, [gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress, aiPlannedPath]);
 
   // Handle new game
   function handleNewGame() {
