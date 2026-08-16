@@ -11,6 +11,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment } from '../utils/aiEngine';
 import { requestAIMove } from '../utils/aiClient';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
+import { capturedLabel } from '../utils/labels';
 import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
 import {
@@ -1209,21 +1210,29 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
                 </div>
               </div>
 
-              {/* Pieces Captured */}
+              {/* Pieces Captured — "captured by", matching the in-game card.
+                  The number beside the red disc is what red took, not what red
+                  lost, and the bare label "Red" read as the latter. */}
               <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Pieces Captured</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Pieces captured by</p>
                 <div className="flex justify-around">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-red-800" />
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Red</p>
+                    <span className="sr-only">
+                      {capturedLabel(isAIGame ? 'AI' : 'Red player', gameState.score.red)}
+                    </span>
+                    <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-red-800" aria-hidden="true" />
+                    <div aria-hidden="true">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{isAIGame ? 'AI' : 'Red'}</p>
                       <p className="text-xl font-bold text-gray-900 dark:text-white">{gameState.score.red}</p>
                     </div>
                   </div>
                   <div className="w-px bg-primary/20"></div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 border-2 border-gray-500" />
-                    <div>
+                    <span className="sr-only">
+                      {capturedLabel('Black player', gameState.score.black)}
+                    </span>
+                    <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 border-2 border-gray-500" aria-hidden="true" />
+                    <div aria-hidden="true">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Black</p>
                       <p className="text-xl font-bold text-gray-900 dark:text-white">{gameState.score.black}</p>
                     </div>

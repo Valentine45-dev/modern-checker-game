@@ -1,5 +1,6 @@
 import { Users, Bot, Target, Flame } from 'lucide-react';
 import { PlayerColor, GameMode } from '../types';
+import { capturedLabel } from '../utils/labels';
 
 interface GameInfoProps {
   currentPlayer: PlayerColor;
@@ -97,20 +98,37 @@ const GameInfo = ({ currentPlayer, turnNumber, capturedPieces, timer, gameMode =
         </div>
       </div>
 
-      {/* Captured Pieces Card */}
+      {/* Captured Pieces Card
+          Headed "captured by" on purpose. The count next to the red disc is how
+          many pieces red has TAKEN, but a red disc beside a number reads as red
+          pieces LOST — the opposite. Naming the owner of the tally fixes it
+          without changing which colour identifies which player. */}
       <div className="bg-background-light/80 dark:bg-background-dark/90 backdrop-blur-sm p-4 rounded-xl border border-primary/20">
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-3">Captured Pieces</h3>
-        <div className="flex items-center justify-around gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-red-600 border-2 border-red-800 shadow-md" />
-            <span className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-              <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">x </span>{capturedPieces.red}
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-3">Pieces captured by</h3>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between py-1">
+            {/* The visual row is split across three elements, so it is hidden from
+                assistive tech and replaced by one sentence that survives being
+                read out of order. */}
+            <span className="sr-only">{capturedLabel(isAIGame ? 'AI' : 'Red player', capturedPieces.red)}</span>
+            <div className="flex items-center gap-2" aria-hidden="true">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-600 border-2 border-red-800 shadow-md" />
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                <RedLabel />
+              </span>
+            </div>
+            <span className="text-base sm:text-lg font-bold text-gray-900 dark:text-white" aria-hidden="true">
+              {capturedPieces.red}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-300 dark:bg-gray-600 border-2 border-gray-500 dark:border-gray-700 shadow-md" />
-            <span className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-              <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">x </span>{capturedPieces.black}
+          <div className="flex items-center justify-between py-1">
+            <span className="sr-only">{capturedLabel('Black player', capturedPieces.black)}</span>
+            <div className="flex items-center gap-2" aria-hidden="true">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-300 dark:bg-gray-600 border-2 border-gray-500 dark:border-gray-700 shadow-md" />
+              <span className="text-sm text-gray-600 dark:text-gray-400">Black Player</span>
+            </div>
+            <span className="text-base sm:text-lg font-bold text-gray-900 dark:text-white" aria-hidden="true">
+              {capturedPieces.black}
             </span>
           </div>
         </div>
