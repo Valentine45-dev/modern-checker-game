@@ -522,22 +522,40 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       clearGameState();
     }
     
-    setGameState(prev => ({
-      ...prev,
-      board: newBoard,
-      currentPlayer: nextPlayer,
-      selectedPiece: null,
-      validMoves: [],
-      possibleCaptures: [],
-      // Appended to the latest history, not the one captured at render time,
-      // so a move can never overwrite one recorded in between.
-      moveHistory: [...prev.moveHistory, move],
-      score: newScore,
-      gameStatus: winner ? 'finished' : 'playing',
-      winner,
-      mustCapture: false
-    }));
-    
+    // Bank the time this turn actually took, then restart the clock for the
+    // player now to move.
+    const turnEndedAt = Date.now();
+    const spent = elapsedThisTurn(turnEndedAt);
+
+    setGameState(prev => {
+      const mover = prev.currentPlayer;
+      const banked = prev.playerTimers
+        ? {
+            ...prev.playerTimers,
+            [mover]: Math.max(0, prev.playerTimers[mover] - spent),
+          }
+        : prev.playerTimers;
+
+      return {
+        ...prev,
+        board: newBoard,
+        currentPlayer: nextPlayer,
+        selectedPiece: null,
+        validMoves: [],
+        possibleCaptures: [],
+        // Appended to the latest history, not the one captured at render time,
+        // so a move can never overwrite one recorded in between.
+        moveHistory: [...prev.moveHistory, move],
+        score: newScore,
+        playerTimers: banked,
+        turnStartTime: turnEndedAt,
+        gameStatus: winner ? 'finished' : 'playing',
+        winner,
+        mustCapture: false
+      };
+    });
+
+    setClockNow(turnEndedAt);
     setTurnNumber(prev => prev + 1);
   }
 
@@ -634,9 +652,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           chainOrigin,
           aiThinking,
           piecesWithCaptures
-        ).catch(error => {
-          console.warn('Failed to auto-save game:', error);
-        });
+        );
       }
       // gameState is deliberately absent: see above. The board, turn and status
       // cover every change worth persisting.
@@ -657,26 +673,85 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       gameSettings.autoSave,
     ]);
 
-  // Timer countdown
+  // ============================================
+  // CLOCKS
+  // ============================================
+  //
+  // These used to count interval ticks, with the interval torn down and rebuilt
+  // whenever the turn changed. A turn shorter than the 1000ms interval therefore
+  // cost its player nothing at all — the AI moves in about 950ms and finished
+  // games having never lost a single second.
+  //
+  // Time is now measured from a timestamp taken when the turn began, so it is
+  // correct regardless of how the interval happens to line up. The interval below
+  // only exists to re-render the display.
+
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (gameState.gameStatus !== 'playing') return;
+    const interval = setInterval(() => setClockNow(Date.now()), 250);
+    return () => clearInterval(interval);
+  }, [gameState.gameStatus]);
+
+  // A resumed game should not be charged for the time the tab was closed.
+  useEffect(() => {
+    setGameState(prev => ({ ...prev, turnStartTime: Date.now() }));
+    setClockNow(Date.now());
+  }, []);
+
+  /**
+   * Seconds the current turn has been running, kept fractional.
+   *
+   * Rounding down to whole seconds here is what let the AI play for free: its
+   * turns take about 950ms, and Math.floor(0.95) is 0, so every AI move cost it
+   * nothing. Clocks are stored as fractional seconds and only rounded for
+   * display.
+   */
+  function elapsedThisTurn(atMs: number): number {
+    const startedAt = gameState.turnStartTime ?? atMs;
+    return Math.max(0, (atMs - startedAt) / 1000);
+  }
+
+  /** Exact time left for a player, counting the turn in progress. */
+  function remainingExact(color: PlayerColor): number {
+    const banked = gameState.playerTimers?.[color] ?? 0;
+    if (color !== gameState.currentPlayer || gameState.gameStatus !== 'playing') {
+      return banked;
+    }
+    return banked - elapsedThisTurn(clockNow);
+  }
+
+  /** Whole seconds to show on the clock face. */
+  function remainingSeconds(color: PlayerColor): number {
+    return Math.max(0, Math.ceil(remainingExact(color)));
+  }
+
+  // Running out of time now actually loses the game.
   useEffect(() => {
     if (gameState.gameStatus !== 'playing' || !gameState.playerTimers) return;
+    if (remainingExact(gameState.currentPlayer) > 0) return;
 
-    const interval = setInterval(() => {
-      setGameState(prev => ({
-        ...prev,
-        playerTimers: {
-          ...prev.playerTimers!,
-          [prev.currentPlayer]: Math.max(0, prev.playerTimers![prev.currentPlayer] - 1)
-        }
-      }));
-    }, 1000);
+    setGameState(prev => ({
+      ...prev,
+      playerTimers: { ...prev.playerTimers!, [prev.currentPlayer]: 0 },
+      gameStatus: 'finished',
+      winner: opponentOf(prev.currentPlayer),
+    }));
 
-    return () => clearInterval(interval);
-    // The tick reads the timers through the setState updater, so it does not need
-    // gameState.playerTimers as a dependency (adding it would restart the interval
-    // every second).
+    // Without this the finished game stays in localStorage as "playing" and the
+    // menu offers to resume it. finalizeTurn already does this for a normal
+    // win; the timeout and resign paths bypassed it.
+    clearGameState();
+
+    addToast({
+      type: 'warning',
+      message: 'Out of time',
+      description: `${gameState.currentPlayer === aiColor && isAIGame ? 'The AI' : 'That player'} ran out of time.`,
+      duration: 5000,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState.currentPlayer, gameState.gameStatus]);
+  }, [clockNow, gameState.gameStatus, gameState.currentPlayer]);
 
   // AI Move Logic
   useEffect(() => {
@@ -831,6 +906,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     clearGameState();
     
     setGameState(initializeGame());
+    setClockNow(Date.now());
     setTurnNumber(1);
     setKingsPromoted({ red: 0, black: 0 });
     setMultiJumpInProgress(false);
@@ -883,6 +959,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       gameStatus: 'finished',
       winner: opponentOf(prev.currentPlayer)
     }));
+
+    // A resigned game should not be resumable from the menu either.
+    clearGameState();
   }
 
     // Handle quit game
@@ -972,7 +1051,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             currentPlayer={gameState.currentPlayer}
             turnNumber={turnNumber}
             capturedPieces={gameState.score}
-            timer={gameState.playerTimers || { red: 300, black: 300 }}
+            timer={{ red: remainingSeconds('red'), black: remainingSeconds('black') }}
             gameMode={actualGameMode}
           />
           

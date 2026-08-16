@@ -1,4 +1,5 @@
 import { GameState, Piece, Position } from '../types';
+import { getGameSettings } from './gameSettings';
 
 const GAME_STATE_KEY = 'checkers-game-state';
 
@@ -17,7 +18,17 @@ export interface SavedGameState extends GameState {
   pieceStyle: string;
 }
 
-export async function saveGameState(
+/**
+ * Write the game to localStorage.
+ *
+ * Deliberately synchronous. This used to be async purely to `await import()`
+ * the settings module, which made saving unordered with respect to
+ * clearGameState: a save started before a game ended could resolve *after* the
+ * clear and resurrect the finished game, so the menu would offer to resume a
+ * game that was already over. There is no import cycle here, so a plain static
+ * import removes the race entirely.
+ */
+export function saveGameState(
   gameState: GameState,
   turnNumber: number,
   gameStartTime: number,
@@ -28,12 +39,10 @@ export async function saveGameState(
   chainOrigin: Position | null,
   aiThinking: boolean,
   piecesWithCaptures: Set<string>
-): Promise<void> {
+): void {
   try {
-    // Get current visual settings
-    const { getGameSettings } = await import('./gameSettings');
     const settings = getGameSettings();
-    
+
     const savedState: SavedGameState = {
       ...gameState,
       turnNumber,
