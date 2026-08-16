@@ -15,8 +15,6 @@ import { getGameSettings, getAIThinkingTime, updateSoundSettings } from '../util
 import { soundManager } from '../utils/soundManager';
 import {
   createInitialBoard,
-  getPossibleCaptures,
-  getNormalMoves,
   getAllValidMovesForPlayer,
   resolveCapturePath,
   captureDestinations,
@@ -24,6 +22,7 @@ import {
   positionsEqual,
   promotionRow,
   opponentOf,
+  findWinner,
 } from '../utils/rules';
 
 interface GameProps {
@@ -540,11 +539,11 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       timestamp: Date.now()
     };
     
-    // Check for win condition
-    const winner = checkWinCondition(newBoard, gameState.currentPlayer);
-    
-    // Switch player
+    // Switch player, then ask whether THEY can continue. Asking about the side
+    // that just moved is the wrong question — a player loses when they cannot
+    // move on their own turn.
     const nextPlayer: PlayerColor = opponentOf(gameState.currentPlayer);
+    const winner = findWinner(newBoard, nextPlayer);
     
     // No turn-change toast: the "Current Player" card in the sidebar already
     // shows whose turn it is, and firing a toast for every single move was the
@@ -592,48 +591,30 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     setTurnNumber(prev => prev + 1);
   }
 
-  // Check win condition
-  function checkWinCondition(board: (Piece | null)[][], lastPlayer: PlayerColor): PlayerColor | undefined {
-    const opponentColor: PlayerColor = opponentOf(lastPlayer);
-    
-    let opponentHasPieces = false;
-    let opponentHasMoves = false;
-    
-    // Check if opponent has any pieces or moves
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        const piece = board[row][col];
-        if (piece && piece.color === opponentColor) {
-          opponentHasPieces = true;
-          
-          // Check if this piece has any valid moves
-          const captures = getPossibleCaptures(piece, board);
-          const normalMoves = getNormalMoves(piece, board);
-          
-          if (captures.length > 0 || normalMoves.length > 0) {
-            opponentHasMoves = true;
-            break;
-          }
-        }
-      }
-      if (opponentHasMoves) break;
-    }
-    
-    if (!opponentHasPieces || !opponentHasMoves) {
-      const winnerName = lastPlayer === 'red' 
-        ? (isAIGame ? 'AI' : 'Red player') 
-        : 'Black player';
-      addToast({
-        type: 'success',
-        message: 'Game Over!',
-        description: `${winnerName} wins!`,
-        duration: 5000,
-      });
-      return lastPlayer;
-    }
-    
-    return undefined;
-  }
+  /**
+   * Safety net: end the game whenever the side to move cannot continue.
+   *
+   * Win detection used to live inside finalizeTurn, which only runs when a move
+   * completes. That misses every other way of arriving at a stuck position — a
+   * saved game resumed with the player to move already blocked, or the AI
+   * finding no legal move, which previously just logged an error and left the
+   * game hanging with no winner and no way to continue.
+   *
+   * It also raised the game-over toast from inside the state-update path. The
+   * dialog announces the result now, so nothing here has side effects beyond
+   * ending the game.
+   */
+  useEffect(() => {
+    if (gameState.gameStatus !== 'playing') return;
+    // Mid-chain the mover still "has" the turn; the position is not settled yet.
+    if (multiJumpInProgress) return;
+
+    const winner = findWinner(gameState.board, gameState.currentPlayer);
+    if (!winner) return;
+
+    setGameState(prev => ({ ...prev, gameStatus: 'finished', winner }));
+    clearGameState();
+  }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
 
   // Hold the game-over modal back so the final move is visible first.
   useEffect(() => {
@@ -673,9 +654,11 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     // watches the fields that actually represent progress, and reads the full
     // state through a ref so the saved snapshot is still current.
     useEffect(() => {
-      if (gameStateRef.current.gameStatus === 'playing' && gameSettings.autoSave) {
+      const current = gameStateRef.current;
+
+      if (current.gameStatus === 'playing' && gameSettings.autoSave) {
         saveGameState(
-          gameStateRef.current,
+          current,
           turnNumber,
           gameStartTime,
           kingsPromoted,
@@ -686,6 +669,13 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           aiThinking,
           piecesWithCaptures
         );
+      } else if (current.gameStatus === 'finished') {
+        // This effect owns persistence, so it also owns removing a finished
+        // game. The end-of-game paths clear it too, but effect order is not
+        // guaranteed: if this one ran afterwards holding a still-"playing"
+        // snapshot it would write the game straight back, and the menu would
+        // offer to resume something already over.
+        clearGameState();
       }
       // gameState is deliberately absent: see above. The board, turn and status
       // cover every change worth persisting.

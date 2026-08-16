@@ -6,6 +6,7 @@ import {
   getAllValidMovesForPlayer,
   createInitialBoard,
   promotionRow,
+  findWinner,
 } from '../rules';
 import { boardFrom, emptyBoard, put, countPieces, render } from './testUtils';
 
@@ -213,6 +214,46 @@ describe('men capture backwards', () => {
     const captures = getPossibleCaptures(board[4][4]!, board);
     expect(captures.length).toBeGreaterThan(0);
     expect(captures.some(c => c.position.row === 2 && c.position.col === 2)).toBe(true);
+  });
+});
+
+describe('win detection', () => {
+  it('declares no winner while both sides can play', () => {
+    const board = createInitialBoard();
+    expect(findWinner(board, 'red')).toBeUndefined();
+    expect(findWinner(board, 'black')).toBeUndefined();
+  });
+
+  it('awards the win when the side to move has no pieces', () => {
+    const board = emptyBoard();
+    put(board, 3, 3, 'red');
+
+    expect(findWinner(board, 'black')).toBe('red');
+  });
+
+  it('awards the win when the side to move is blocked but still has pieces', () => {
+    // Black's only man is cornered: its forward diagonal is occupied and the
+    // square beyond is occupied too, so it can neither step nor jump.
+    const board = emptyBoard();
+    put(board, 7, 7, 'black');
+    put(board, 6, 6, 'red');
+    put(board, 5, 5, 'red');
+
+    expect(countPieces(board, 'black')).toBe(1);
+    expect(findWinner(board, 'black')).toBe('red');
+  });
+
+  it('asks about the player to move, not the player who just moved', () => {
+    // This is the distinction the old check got wrong. Red is stuck; black is
+    // not. Whoever is to move decides the result.
+    const board = emptyBoard();
+    put(board, 0, 0, 'red');
+    put(board, 1, 1, 'black');
+    put(board, 2, 2, 'black');
+    put(board, 5, 5, 'black');
+
+    expect(findWinner(board, 'red')).toBe('black');
+    expect(findWinner(board, 'black')).toBeUndefined();
   });
 });
 

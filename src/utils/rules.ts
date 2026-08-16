@@ -321,6 +321,21 @@ export function hasAnyMove(board: BoardType, player: PlayerColor): boolean {
   return captures.size > 0 || normalMoves.size > 0;
 }
 
+/**
+ * Who has won, given whose turn it is — or undefined if the game continues.
+ *
+ * A player loses when they have no pieces left OR no legal move. Note this is a
+ * question about the player *to move*, not about the player who just moved: a
+ * side that blocks itself in loses, and asking only "can my opponent still
+ * play?" at the end of a turn misses the case where the game is loaded, resumed,
+ * or otherwise arrives at a stuck position without a move having been made.
+ */
+export function findWinner(board: BoardType, playerToMove: PlayerColor): PlayerColor | undefined {
+  if (countPieces(board, playerToMove) === 0) return opponentOf(playerToMove);
+  if (!hasAnyMove(board, playerToMove)) return opponentOf(playerToMove);
+  return undefined;
+}
+
 // ============================================
 // CAPTURE TREE NAVIGATION
 // ============================================
