@@ -27,12 +27,18 @@ export interface AIDifficulty {
 
 /**
  * Depths chosen from measured play, not guesswork. Against a fixed reference
- * engine each rung scores strictly better than the one below it.
+ * engine each rung scores strictly better than the one below it, and Hard beats
+ * a correct engine searching to its own depth.
  *
- * Depth 6 with quiescence costs ~58ms mean and ~244ms worst case per move on a
- * desktop CPU; measured in the browser, the worst single blocking task over a
- * 24-ply game was 114ms, and it lands while the "AI is thinking" banner is up.
- * Going deeper than 6 would need the search moved to a Web Worker first.
+ * Depth 6 costs ~37ms mean and ~118ms worst case headless, and the worst single
+ * blocking task measured in the browser over a real game is ~114ms — which
+ * lands while the thinking banner is already showing.
+ *
+ * Depth 7 is tempting: it beats a correct engine searching to its own depth,
+ * and headless timings suggested 175ms worst case. The browser disagreed —
+ * 466ms worst, with two tasks over 200ms in one game. Node under-predicts the
+ * browser here, so depth 7 waits for the search to move into a Web Worker
+ * rather than shipping a visible stall.
  *
  * Previously this table read easy:1, medium:3, hard:2 — Hard searched
  * SHALLOWER than Medium, while the README documented 2/3/4.
