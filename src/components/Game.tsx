@@ -88,6 +88,10 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   // exactly that sequence instead of re-choosing at each jump.
   const [aiPlannedPath, setAiPlannedPath] = useState<Position[]>([]);
   const [shakingPieceId, setShakingPieceId] = useState<string | null>(null);
+  // The game ends the instant the winning move lands, but the modal waits a
+  // moment so the player can actually watch that move — particularly a capture
+  // chain, which is exactly when the finish is most worth seeing.
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
   const [piecesWithCaptures, setPiecesWithCaptures] = useState<Set<string>>(() => {
     const savedState = loadGameState();
     return new Set(savedState?.piecesWithCaptures || []);
@@ -573,6 +577,18 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     return undefined;
   }
 
+  // Hold the game-over modal back so the final move is visible first.
+  useEffect(() => {
+    if (gameState.gameStatus !== 'finished' || !gameState.winner) {
+      setShowGameOverModal(false);
+      return;
+    }
+
+    const delay = gameSettings.animationsEnabled ? 1500 : 600;
+    const timer = setTimeout(() => setShowGameOverModal(true), delay);
+    return () => clearTimeout(timer);
+  }, [gameState.gameStatus, gameState.winner, gameSettings.animationsEnabled]);
+
   // Update pieces with captures available
   useEffect(() => {
     if (gameState.gameStatus !== 'playing' || multiJumpInProgress) return;
@@ -946,19 +962,35 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         </div>
       </div>
       
-      {/* Game Over Modal */}
-      {gameState.gameStatus === 'finished' && gameState.winner && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-background-light dark:bg-background-dark rounded-2xl shadow-2xl max-w-lg w-full mx-4 my-8 max-h-[85vh] overflow-y-auto border border-primary/30">
+      {/* Game Over Modal — held back by showGameOverModal so the winning move
+          is on screen for a moment before this covers the board. */}
+      {showGameOverModal && gameState.winner && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="game-over-title"
+          className={`fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto ${
+            gameSettings.animationsEnabled ? 'animate-game-over-backdrop' : ''
+          }`}
+        >
+          <div
+            className={`bg-background-light dark:bg-background-dark rounded-2xl shadow-2xl max-w-lg w-full mx-4 my-8 max-h-[85vh] overflow-y-auto border border-primary/30 ${
+              gameSettings.animationsEnabled ? 'animate-game-over-card' : ''
+            }`}
+          >
             {/* Header with Trophy */}
             <div className="relative bg-gradient-to-br from-yellow-500/20 via-yellow-600/20 to-orange-500/20 p-6 text-center border-b border-primary/20">
               <div className="flex justify-center mb-3">
-                <div className="p-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-lg">
+                <div
+                  className={`p-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-lg ${
+                    gameSettings.animationsEnabled ? 'animate-game-over-trophy' : ''
+                  }`}
+                >
                   {/* Was the same 5-pointed star path used for the "king crown" */}
                   <Trophy className="w-10 h-10 text-white" aria-hidden="true" />
                 </div>
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+              <h2 id="game-over-title" className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                 {gameState.winner === 'red' 
                   ? (isAIGame ? 'AI' : 'Red') 
                   : 'Black'} Wins!

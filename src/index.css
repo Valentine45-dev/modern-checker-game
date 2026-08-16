@@ -97,5 +97,70 @@
   .animate-capture-glow {
     animation: capture-glow 2s ease-in-out infinite;
   }
+
+  /* Game over modal: the backdrop dims first, then the card rises into it, so
+     the winning move stays readable for a beat instead of being covered
+     instantly. */
+  @keyframes game-over-backdrop-in {
+    from {
+      opacity: 0;
+      backdrop-filter: blur(0px);
+    }
+    to {
+      opacity: 1;
+      backdrop-filter: blur(4px);
+    }
+  }
+
+  .animate-game-over-backdrop {
+    animation: game-over-backdrop-in 0.45s ease-out both;
+  }
+
+  @keyframes game-over-card-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px) scale(0.94);
+    }
+    60% {
+      transform: translateY(-4px) scale(1.01);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-game-over-card {
+    animation: game-over-card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+  }
+
+  /* The trophy lands last, after the card has settled. */
+  @keyframes game-over-trophy-in {
+    from {
+      opacity: 0;
+      transform: scale(0.4) rotate(-18deg);
+    }
+    70% {
+      transform: scale(1.12) rotate(4deg);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+  }
+
+  .animate-game-over-trophy {
+    animation: game-over-trophy-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
+  }
+
+  /* Anyone who has asked the OS to reduce motion gets the modal without the
+     movement, but still gets the delay before it appears. */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-game-over-backdrop,
+    .animate-game-over-card,
+    .animate-game-over-trophy {
+      animation: none;
+    }
+  }
 }
 
