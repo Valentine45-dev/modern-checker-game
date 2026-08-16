@@ -16,8 +16,9 @@ import {
   getPossibleCaptures,
   getNormalMoves,
   getAllValidMovesForPlayer,
-  flattenCaptureMoves,
-  findCaptureInTree,
+  resolveCapturePath,
+  captureDestinations,
+  type ResolvedCapturePath,
   positionsEqual,
   promotionRow,
   opponentOf,
@@ -190,7 +191,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     if (multiJumpInProgress) {
       if (currentJumpPiece && piece.id === currentJumpPiece.id) {
         const { moves, captures } = getValidMovesForPiece(piece);
-        const validPositions = captures.length > 0 ? flattenCaptureMoves(captures) : moves;
+        const validPositions = captures.length > 0 ? captureDestinations(captures, piece) : moves;
         
         setGameState({
           ...gameState,
@@ -255,7 +256,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       return;
     }
     
-    const validPositions = captures.length > 0 ? flattenCaptureMoves(captures) : moves;
+    const validPositions = captures.length > 0 ? captureDestinations(captures, piece) : moves;
     
     if (mustCapture && captures.length > 0) {
       addToast({
@@ -298,29 +299,36 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Execute move or capture
   function executeMoveOrCapture(piece: Piece, newPosition: Position) {
-    const captureMove = findCaptureInTree(gameState.possibleCaptures, newPosition);
-    
-    if (captureMove) {
-      executeCapture(piece, newPosition, captureMove);
+    const resolved = resolveCapturePath(gameState.possibleCaptures, piece, newPosition);
+
+    if (resolved) {
+      executeCapture(piece, newPosition, resolved);
     } else {
       executeNormalMove(piece, newPosition);
     }
   }
 
-  // Execute a capture move
-  function executeCapture(piece: Piece, newPosition: Position, captureMove: PossibleMove) {
+  /**
+   * Execute a capture up to `newPosition`.
+   *
+   * `resolved` carries every piece taken along the way, which is what makes
+   * jumping straight to the end of a chain equivalent to clicking each landing
+   * square in turn. Acting on a single tree node instead would move the piece
+   * the whole distance while removing only the last victim.
+   */
+  function executeCapture(piece: Piece, newPosition: Position, resolved: ResolvedCapturePath) {
     const newBoard = gameState.board.map(row => [...row]);
     const { row: oldRow, col: oldCol } = piece.position;
     const { row: newRow, col: newCol } = newPosition;
-    
-    // Add current captured pieces to accumulated list
-    const currentCaptures = [...accumulatedCaptures, ...captureMove.capturedPieces];
-    
-    // Remove captured pieces from THIS jump
-    for (const captured of captureMove.capturedPieces) {
+
+    // Everything taken on the way here, plus anything from earlier hops
+    const currentCaptures = [...accumulatedCaptures, ...resolved.captured];
+
+    // Remove every piece captured along the resolved path
+    for (const captured of resolved.captured) {
       newBoard[captured.position.row][captured.position.col] = null;
     }
-    
+
     // Check for king promotion
     const reachedBackRank =
       newRow === promotionRow(piece.color);
@@ -353,19 +361,21 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     newBoard[oldRow][oldCol] = null;
     newBoard[newRow][newCol] = movedPiece;
 
-    // Check if there are continuation captures
-    if (captureMove.continuations && captureMove.continuations.length > 0 && !becameKing) {
+    // More jumps available from where the piece landed? `endsTurn` already
+    // accounts for promotion, so a man that just crowned stops here.
+    const continuations = resolved.node.continuations;
+    if (!resolved.endsTurn && continuations && continuations.length > 0 && !becameKing) {
       // Multi-jump in progress - DON'T update score yet, just accumulate
       setMultiJumpInProgress(true);
       setCurrentJumpPiece(movedPiece);
       setAccumulatedCaptures(currentCaptures);
-      
+
       setGameState({
         ...gameState,
         board: newBoard,
         selectedPiece: movedPiece,
-        validMoves: flattenCaptureMoves(captureMove.continuations),
-        possibleCaptures: captureMove.continuations,
+        validMoves: captureDestinations(continuations, movedPiece),
+        possibleCaptures: continuations,
         score: gameState.score // Don't update score during multi-jump
       });
       
@@ -669,12 +679,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           // evaluation at all, so the AI could pick a 1-piece branch when a
           // 3-piece one was available.
           const planned = nextHop
-            ? findCaptureInTree(captures, nextHop)
+            ? resolveCapturePath(captures, currentJumpPiece, nextHop)
             : null;
 
           if (planned) {
             setAiPlannedPath(prev => prev.slice(1));
-            executeCapture(currentJumpPiece, planned.position, planned);
+            executeCapture(currentJumpPiece, planned.node.position, planned);
             playSound(() => soundManager.playAIMoveSound());
           } else {
             console.error('🤖 AI multi-jump lost its planned path');
@@ -709,9 +719,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
         if (aiMove.move.isCapture) {
           const { captures } = getValidMovesForPiece(piece);
-          const node = findCaptureInTree(captures, firstHop);
-          if (node) {
-            executeCapture(piece, node.position, node);
+          const resolved = resolveCapturePath(captures, piece, firstHop);
+          if (resolved) {
+            executeCapture(piece, resolved.node.position, resolved);
           } else {
             console.error('🤖 AI planned a capture the board does not offer', firstHop);
             setAiThinking(false);

@@ -326,6 +326,94 @@ export function flattenCaptureMoves(captures: PossibleMove[]): Position[] {
   return positions;
 }
 
+/**
+ * A destination inside a capture tree, resolved together with everything the
+ * piece takes on the way there.
+ */
+export interface ResolvedCapturePath {
+  /** The tree node that lands on the requested square. */
+  node: PossibleMove;
+  /** Landing squares from the current position to the target, in order. */
+  path: Position[];
+  /** EVERY piece captured along that path, not just at the final hop. */
+  captured: Piece[];
+  /** True when the sequence must stop here: no continuations, or a man promoted. */
+  endsTurn: boolean;
+}
+
+/**
+ * Resolve a clicked destination to its complete path through the capture tree.
+ *
+ * This exists because a capture tree node only knows about its OWN hop. Looking
+ * a node up by position and then acting on `node.capturedPieces` moves the piece
+ * the whole way while removing only the last victim, leaving the intermediate
+ * pieces standing on an illegal board. Anything that resolves a destination must
+ * go through here so it gets the cumulative captures.
+ *
+ * A man that lands on its promotion row ends its turn, so nothing beyond such a
+ * landing is reachable — the same rule `enumerateMoves` applies, which keeps the
+ * squares the UI offers identical to the ones the engine considers legal.
+ */
+export function resolveCapturePath(
+  captures: PossibleMove[],
+  piece: Piece,
+  target: Position
+): ResolvedCapturePath | null {
+  const search = (
+    nodes: PossibleMove[],
+    pathSoFar: Position[],
+    capturedSoFar: Piece[]
+  ): ResolvedCapturePath | null => {
+    for (const node of nodes) {
+      const path = [...pathSoFar, node.position];
+      const captured = [...capturedSoFar, ...node.capturedPieces];
+
+      const promotesHere =
+        piece.type !== 'king' && node.position.row === promotionRow(piece.color);
+      const canContinue =
+        !promotesHere && !!node.continuations && node.continuations.length > 0;
+
+      if (positionsEqual(node.position, target)) {
+        return { node, path, captured, endsTurn: !canContinue };
+      }
+
+      if (canContinue) {
+        const deeper = search(node.continuations!, path, captured);
+        if (deeper) return deeper;
+      }
+    }
+    return null;
+  };
+
+  return search(captures, [], []);
+}
+
+/**
+ * Every square a piece may legally finish a hop on, given a capture tree.
+ * Intermediate landings stay selectable so a player can still take a sequence
+ * one jump at a time; squares beyond a promotion are excluded because the turn
+ * ends there.
+ */
+export function captureDestinations(captures: PossibleMove[], piece: Piece): Position[] {
+  const out: Position[] = [];
+
+  const walk = (nodes: PossibleMove[]) => {
+    for (const node of nodes) {
+      out.push(node.position);
+
+      const promotesHere =
+        piece.type !== 'king' && node.position.row === promotionRow(piece.color);
+
+      if (!promotesHere && node.continuations && node.continuations.length > 0) {
+        walk(node.continuations);
+      }
+    }
+  };
+
+  walk(captures);
+  return out;
+}
+
 /** Locate the node in a capture tree that lands on `targetPos`. */
 export function findCaptureInTree(captures: PossibleMove[], targetPos: Position): PossibleMove | null {
   for (const capture of captures) {
