@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Trophy, Crown, Repeat, Bot, Sparkles, RotateCcw, ArrowLeft } from 'lucide-react';
 import { GameState, Piece, Position, PlayerColor, Move, Board as BoardType, GameMode, PossibleMove } from '../types';
 import Board from './Board';
@@ -486,6 +486,57 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     !aiThinking &&
     !multiJumpInProgress &&
     undoTargetIndex() >= 0;
+
+  /**
+   * Pieces the keyboard's C shortcut can jump to, in board reading order.
+   *
+   * Only ever the side a person is playing. The AI does not use a keyboard, so
+   * offering the shortcut on its turn would just select a piece the player is
+   * not allowed to touch. In PvP both sides qualify — whoever is to move is a
+   * person.
+   */
+  const captureCandidates = useMemo<Piece[]>(() => {
+    if (gameState.gameStatus !== 'playing' || aiThinking) return [];
+    if (isAIGame && gameState.currentPlayer === aiColor) return [];
+
+    // Mid-chain the mandatory-capture set is stale — the effect that fills it
+    // skips while a chain runs — and in any case the only legal piece is the one
+    // still jumping.
+    if (multiJumpInProgress) return currentJumpPiece ? [currentJumpPiece] : [];
+
+    const found: Piece[] = [];
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = gameState.board[row][col];
+        if (piece && piecesWithCaptures.has(piece.id)) found.push(piece);
+      }
+    }
+    return found;
+  }, [
+    gameState.board,
+    gameState.currentPlayer,
+    gameState.gameStatus,
+    piecesWithCaptures,
+    multiJumpInProgress,
+    currentJumpPiece,
+    aiThinking,
+    isAIGame,
+    aiColor,
+  ]);
+
+  /** C pressed with nothing to jump to. */
+  function handleNoCaptures() {
+    // On the AI's turn the board already says "AI is thinking"; a second message
+    // saying there are no captures would be both redundant and untrue.
+    if (aiThinking || (isAIGame && gameState.currentPlayer === aiColor)) return;
+
+    addToast({
+      type: 'info',
+      message: 'No captures available',
+      description: 'Nothing has to be taken this turn. Use the arrow keys to pick a piece.',
+      duration: 2500,
+    });
+  }
 
   // Execute move or capture
   function executeMoveOrCapture(piece: Piece, newPosition: Position) {
@@ -1257,6 +1308,8 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
               shakingPieceId={shakingPieceId}
               piecesWithCaptures={gameSettings.showCaptures ? piecesWithCaptures : new Set()}
               onDeselect={handleDeselect}
+              captureCandidates={captureCandidates}
+              onNoCaptures={handleNoCaptures}
             />
           
           {/* Multi-jump indicator */}

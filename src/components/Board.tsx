@@ -3,6 +3,7 @@ import { Piece as GamePiece, Position } from '../types';
 import Square from './Square';
 import { getGameSettings } from '../utils/gameSettings';
 import { getBoardTheme, getPieceStyle, getBoardFrameClasses, getBoardGridClasses } from '../utils/visualThemes';
+import { nextCaptureCandidate } from '../utils/boardNavigation';
 
 interface BoardProps {
   board: (GamePiece | null)[][];
@@ -14,12 +15,22 @@ interface BoardProps {
   piecesWithCaptures: Set<string>;
   /** Escape clears the current selection. */
   onDeselect: () => void;
+  /**
+   * Pieces the C shortcut cycles through, in board reading order.
+   *
+   * Built by Game, which is the only place that knows whose turn it is, whether
+   * the AI is thinking and whether a capture chain is under way. Keeping the
+   * rules there leaves this component knowing only how to move a cursor.
+   */
+  captureCandidates: GamePiece[];
+  /** C was pressed with nothing to jump to. */
+  onNoCaptures: () => void;
 }
 
 /** Where the keyboard cursor starts: the first playable square. */
 const INITIAL_CURSOR: Position = { row: 0, col: 1 };
 
-const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, shakingPieceId, piecesWithCaptures, onDeselect }: BoardProps) => {
+const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, shakingPieceId, piecesWithCaptures, onDeselect, captureCandidates, onNoCaptures }: BoardProps) => {
   // Read once for the whole board. Square and Piece used to call this
   // themselves, which meant a synchronous localStorage read and JSON.parse per
   // square and per piece — 64+ of them on every repaint.
@@ -68,6 +79,31 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
     }));
   };
 
+  /**
+   * Jump the cursor to a piece that can capture, and select it.
+   *
+   * Captures are mandatory, so when one exists those pieces are the only ones
+   * that can be played at all — and finding them from the keyboard otherwise
+   * means arrowing across up to 64 squares.
+   *
+   * With more than one candidate this does not try to guess which piece is
+   * meant. It steps to the next one in reading order and wraps, the same way
+   * find-next works, so repeated presses walk the whole set. That makes two
+   * candidates the ordinary case rather than an ambiguous one.
+   */
+  const cycleToCapture = (backwards: boolean) => {
+    const next = nextCaptureCandidate(captureCandidates, cursor, backwards);
+    if (!next) {
+      onNoCaptures();
+      return;
+    }
+
+    setCursor(next.position);
+    // Selecting is what lights up the landing squares. It commits to nothing —
+    // another press moves on, and Escape clears it.
+    onPieceClick(next);
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case 'ArrowUp': event.preventDefault(); moveCursor(-1, 0); break;
@@ -75,6 +111,13 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
       case 'ArrowLeft': event.preventDefault(); moveCursor(0, -1); break;
       case 'ArrowRight': event.preventDefault(); moveCursor(0, 1); break;
       case 'Escape': event.preventDefault(); onDeselect(); break;
+      case 'c':
+      case 'C':
+        // Ignore browser and OS shortcuts built on C, copy above all.
+        if (event.ctrlKey || event.metaKey || event.altKey) break;
+        event.preventDefault();
+        cycleToCapture(event.shiftKey);
+        break;
       default: break;
     }
   };
@@ -93,7 +136,7 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
         <div
           ref={gridRef}
           role="grid"
-          aria-label="Checkers board. Use the arrow keys to move between squares, then Enter to select a piece or play a move. Escape clears the selection."
+          aria-label="Checkers board. Use the arrow keys to move between squares, then Enter to select a piece or play a move. Press C to jump to a piece that can capture, and again for the next one. Escape clears the selection."
           aria-rowcount={8}
           aria-colcount={8}
           onKeyDown={handleKeyDown}

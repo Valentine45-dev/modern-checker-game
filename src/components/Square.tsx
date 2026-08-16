@@ -28,7 +28,8 @@ function describe(
   position: Position,
   piece: GamePiece | null,
   isValidMove: boolean,
-  isSelected: boolean
+  isSelected: boolean,
+  hasCapture: boolean
 ): string {
   const name = squareName(position.row, position.col);
 
@@ -40,6 +41,10 @@ function describe(
   if (piece) {
     parts.push(`${piece.color} ${piece.type === 'king' ? 'king' : 'piece'}`);
     if (isSelected) parts.push('selected');
+    // A capture is signalled visually by a glow around the piece, which said
+    // nothing to anyone not looking at it. It matters more than decoration:
+    // captures are mandatory, so these are the only pieces that can be played.
+    if (hasCapture) parts.push('capture available');
   } else {
     parts.push('empty');
   }
@@ -94,7 +99,7 @@ const Square = ({
     <div
       ref={el => registerCell(position.row, position.col, el)}
       role="gridcell"
-      aria-label={describe(position, piece, isValidMove, isSelected)}
+      aria-label={describe(position, piece, isValidMove, isSelected, hasCapture)}
       aria-selected={isSelected}
       // Roving tabindex: only the cursor square is reachable with Tab, so the
       // board is one stop rather than 64.
