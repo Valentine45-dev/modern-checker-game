@@ -5,6 +5,7 @@ import {
   applyMove,
   findPieceById,
   opponentOf,
+  hashPosition,
   type FullMove,
 } from './rules';
 
@@ -263,6 +264,25 @@ function quiescence(
   return best;
 }
 
+/**
+ * Transposition table.
+ *
+ * The same position is reached by many move orders, so without this the search
+ * re-explores identical subtrees repeatedly. Entries are only reusable at the
+ * depth they were searched to or deeper, and the stored bound has to be
+ * respected: a value produced under a cutoff is a bound, not the true score.
+ */
+type BoundKind = 'exact' | 'lower' | 'upper';
+interface TableEntry {
+  depth: number;
+  value: number;
+  bound: BoundKind;
+}
+
+const transpositionTable = new Map<string, TableEntry>();
+/** Cleared per root search, so it never grows without limit across a game. */
+const MAX_TABLE_ENTRIES = 200_000;
+
 function minimax(
   board: BoardType,
   depth: number,
@@ -272,6 +292,17 @@ function minimax(
   aiColor: PlayerColor
 ): number {
   const currentPlayer = maximizingPlayer ? aiColor : opponentOf(aiColor);
+
+  const key = hashPosition(board, currentPlayer);
+  const cached = transpositionTable.get(key);
+  if (cached && cached.depth >= depth) {
+    // An exact score is usable as-is. A bound is only usable when it already
+    // falls outside the window we are searching.
+    if (cached.bound === 'exact') return cached.value;
+    if (cached.bound === 'lower' && cached.value >= beta) return cached.value;
+    if (cached.bound === 'upper' && cached.value <= alpha) return cached.value;
+  }
+
   const moves = enumerateMoves(board, currentPlayer);
 
   // Side to move has nothing legal: they have lost. Prefer quicker wins and
@@ -284,30 +315,47 @@ function minimax(
     return quiescence(board, alpha, beta, maximizingPlayer, aiColor, QUIESCENCE_LIMIT);
   }
 
+  const originalAlpha = alpha;
+  const originalBeta = beta;
   const ordered = orderMoves(moves);
 
+  let best: number;
+
   if (maximizingPlayer) {
-    let maxEval = -Infinity;
+    best = -Infinity;
     for (const move of ordered) {
       const evaluation = minimax(applyMove(board, move), depth - 1, alpha, beta, false, aiColor);
-      if (evaluation > maxEval) maxEval = evaluation;
+      if (evaluation > best) best = evaluation;
       if (evaluation > alpha) alpha = evaluation;
       // One flat loop, so this cutoff actually skips the remaining siblings.
       // The old shape looped per piece and broke only the inner loop, which
       // meant a cutoff still searched every other piece.
       if (beta <= alpha) break;
     }
-    return maxEval;
+  } else {
+    best = Infinity;
+    for (const move of ordered) {
+      const evaluation = minimax(applyMove(board, move), depth - 1, alpha, beta, true, aiColor);
+      if (evaluation < best) best = evaluation;
+      if (evaluation < beta) beta = evaluation;
+      if (beta <= alpha) break;
+    }
   }
 
-  let minEval = Infinity;
-  for (const move of ordered) {
-    const evaluation = minimax(applyMove(board, move), depth - 1, alpha, beta, true, aiColor);
-    if (evaluation < minEval) minEval = evaluation;
-    if (evaluation < beta) beta = evaluation;
-    if (beta <= alpha) break;
+  // Record what kind of value this is. A score that lands outside the window we
+  // searched is only a bound, whichever kind of node produced it — a max node
+  // can fail low and a min node can fail high. Labelling either as exact
+  // poisons later lookups, which showed up as the search losing games it had
+  // previously drawn.
+  let bound: BoundKind = 'exact';
+  if (best <= originalAlpha) bound = 'upper';
+  else if (best >= originalBeta) bound = 'lower';
+
+  if (transpositionTable.size < MAX_TABLE_ENTRIES) {
+    transpositionTable.set(key, { depth, value: best, bound });
   }
-  return minEval;
+
+  return best;
 }
 
 // ============================================
@@ -323,6 +371,10 @@ export function calculateAIMove(
 
   const moves = enumerateMoves(board, aiColor);
   if (moves.length === 0) return null;
+
+  // Entries are only valid for the position they were computed from, and the
+  // board has moved on since the last turn. Cheaper and safer than ageing them.
+  transpositionTable.clear();
 
   // Deliberate weakness for the easier tiers: sometimes just don't look.
   // Mandatory capture still applies, so a "blunder" picks a worse capture

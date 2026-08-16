@@ -549,6 +549,64 @@ export function bestCaptureCountFor(board: BoardType, player: PlayerColor): numb
 }
 
 // ============================================
+// POSITION HASHING
+// ============================================
+
+/**
+ * Zobrist keys: one random 32-bit value per (square, colour, rank), plus one
+ * for "black to move". Generated once at module load with a fixed seed so runs
+ * are reproducible.
+ *
+ * Two 32-bit halves are combined into a string key rather than using BigInt,
+ * because this sits in the search's hot path and BigInt allocation would cost
+ * more than the table saves.
+ */
+const ZOBRIST = (() => {
+  let seed = 0x9e3779b9;
+  const rand = () => {
+    seed ^= seed << 13; seed >>>= 0;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5; seed >>>= 0;
+    return seed >>> 0;
+  };
+
+  // [square][pieceKind] where pieceKind is 0..3 for red/black man/king
+  const squares: number[][][] = [];
+  for (let i = 0; i < 64; i++) {
+    squares.push([[rand(), rand()], [rand(), rand()], [rand(), rand()], [rand(), rand()]]);
+  }
+  return { squares, blackToMove: [rand(), rand()] as [number, number] };
+})();
+
+function pieceKind(piece: Piece): number {
+  const colourOffset = piece.color === 'red' ? 0 : 2;
+  return colourOffset + (piece.type === 'king' ? 1 : 0);
+}
+
+/** A key identifying this exact position with this side to move. */
+export function hashPosition(board: BoardType, sideToMove: PlayerColor): string {
+  let hi = 0;
+  let lo = 0;
+
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (!piece) continue;
+      const keys = ZOBRIST.squares[row * 8 + col][pieceKind(piece)];
+      hi ^= keys[0];
+      lo ^= keys[1];
+    }
+  }
+
+  if (sideToMove === 'black') {
+    hi ^= ZOBRIST.blackToMove[0];
+    lo ^= ZOBRIST.blackToMove[1];
+  }
+
+  return `${hi >>> 0}:${lo >>> 0}`;
+}
+
+// ============================================
 // APPLYING A MOVE
 // ============================================
 
