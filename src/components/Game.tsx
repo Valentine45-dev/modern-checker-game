@@ -210,12 +210,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         const { moves, captures } = getValidMovesForPiece(piece);
         const validPositions = captures.length > 0 ? captureDestinations(captures, piece) : moves;
         
-        setGameState({
-          ...gameState,
+        setGameState(prev => ({
+          ...prev,
           selectedPiece: piece,
           validMoves: validPositions,
           possibleCaptures: captures
-        });
+        }));
       }
       return;
     }
@@ -284,13 +284,13 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       });
     }
     
-    setGameState({
-      ...gameState,
+    setGameState(prev => ({
+      ...prev,
       selectedPiece: piece,
       validMoves: validPositions,
       possibleCaptures: captures,
       mustCapture
-    });
+    }));
   }
 
   // Handle square click to move piece
@@ -392,14 +392,14 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       setAccumulatedCaptures(currentCaptures);
       setChainOrigin(origin);
 
-      setGameState({
-        ...gameState,
+      setGameState(prev => ({
+        ...prev,
         board: newBoard,
         selectedPiece: movedPiece,
         validMoves: captureDestinations(continuations, movedPiece),
         possibleCaptures: continuations,
-        score: gameState.score // Don't update score during multi-jump
-      });
+        score: prev.score // Don't update score during multi-jump
+      }));
       
         addToast({
           type: 'info',
@@ -522,19 +522,21 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       clearGameState();
     }
     
-    setGameState({
-      ...gameState,
+    setGameState(prev => ({
+      ...prev,
       board: newBoard,
       currentPlayer: nextPlayer,
       selectedPiece: null,
       validMoves: [],
       possibleCaptures: [],
-      moveHistory: [...gameState.moveHistory, move],
+      // Appended to the latest history, not the one captured at render time,
+      // so a move can never overwrite one recorded in between.
+      moveHistory: [...prev.moveHistory, move],
       score: newScore,
       gameStatus: winner ? 'finished' : 'playing',
       winner,
       mustCapture: false
-    });
+    }));
     
     setTurnNumber(prev => prev + 1);
   }
@@ -874,12 +876,13 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Handle resign
   function handleResign() {
-    const winner: PlayerColor = opponentOf(gameState.currentPlayer);
-    setGameState({
-      ...gameState,
+    // The winner is derived inside the updater, so resigning always credits the
+    // side whose turn it actually is at the moment the click is processed.
+    setGameState(prev => ({
+      ...prev,
       gameStatus: 'finished',
-      winner
-    });
+      winner: opponentOf(prev.currentPlayer)
+    }));
   }
 
     // Handle quit game
