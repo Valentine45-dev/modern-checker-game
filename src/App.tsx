@@ -6,6 +6,7 @@ import GameModeSelection from './components/GameModeSelection';
 import HowToPlay from './components/HowToPlay';
 import Settings from './components/Settings';
 import { ToastProvider } from './components/ToastNotification';
+import ErrorBoundary from './components/ErrorBoundary';
 import { GameMode } from './types';
 import { hasGameInProgress, getSavedGameMode, clearGameState } from './utils/gamePersistence';
 
@@ -115,12 +116,16 @@ function App() {
         )}
 
         {currentScreen === 'game' && (
-          <Game
-            onBackToMenu={handleBackToMenu}
-            onBackToMenuAfterQuit={handleBackToMenuAfterQuit}
-            onGameQuit={handleGameQuit}
-            gameMode={selectedMode}
-          />
+          // Scoped so a crash during play drops the player back to the menu
+          // rather than taking down the whole app.
+          <ErrorBoundary resetLabel="Back to menu" onReset={handleBackToMenu}>
+            <Game
+              onBackToMenu={handleBackToMenu}
+              onBackToMenuAfterQuit={handleBackToMenuAfterQuit}
+              onGameQuit={handleGameQuit}
+              gameMode={selectedMode}
+            />
+          </ErrorBoundary>
         )}
 
         {currentScreen === 'how-to-play' && (
