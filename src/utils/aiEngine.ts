@@ -26,8 +26,12 @@ export interface AIDifficulty {
 
 /**
  * Depths chosen from measured play, not guesswork. Against a fixed reference
- * engine each rung scores strictly better than the one below it, and depth 6
- * costs ~12ms mean / ~57ms worst case per move on a desktop CPU.
+ * engine each rung scores strictly better than the one below it.
+ *
+ * Depth 6 with quiescence costs ~58ms mean and ~244ms worst case per move on a
+ * desktop CPU; measured in the browser, the worst single blocking task over a
+ * 24-ply game was 114ms, and it lands while the "AI is thinking" banner is up.
+ * Going deeper than 6 would need the search moved to a Web Worker first.
  *
  * Previously this table read easy:1, medium:3, hard:2 — Hard searched
  * SHALLOWER than Medium, while the README documented 2/3/4.
@@ -198,6 +202,67 @@ function orderMoves(moves: FullMove[]): FullMove[] {
   });
 }
 
+/**
+ * How many extra forced-capture plies quiescence may follow past the nominal
+ * depth. Chains shorten material every ply so this terminates on its own; the
+ * cap only guards against a pathological position.
+ */
+const QUIESCENCE_LIMIT = 4;
+
+/**
+ * Keep searching until the position is quiet, then evaluate.
+ *
+ * Stopping the search in the middle of an exchange is how an engine convinces
+ * itself that giving a piece away is fine — it counts the loss but never sees
+ * the recapture. Because captures are mandatory in this variant, "quiet" has an
+ * exact meaning: the side to move has no capture available. While it does have
+ * one it has no choice, so there is nothing to stand pat on and every line must
+ * be followed to its end.
+ */
+function quiescence(
+  board: BoardType,
+  alpha: number,
+  beta: number,
+  maximizingPlayer: boolean,
+  aiColor: PlayerColor,
+  limit: number
+): number {
+  const currentPlayer = maximizingPlayer ? aiColor : opponentOf(aiColor);
+  const moves = enumerateMoves(board, currentPlayer);
+
+  if (moves.length === 0) {
+    return maximizingPlayer ? -WIN_SCORE : WIN_SCORE;
+  }
+
+  // Mandatory capture means either every move is a capture, or none is.
+  const forcedToCapture = moves[0].isCapture;
+  if (!forcedToCapture || limit === 0) {
+    return evaluateBoard(board, aiColor);
+  }
+
+  const ordered = orderMoves(moves);
+
+  if (maximizingPlayer) {
+    let best = -Infinity;
+    for (const move of ordered) {
+      const value = quiescence(applyMove(board, move), alpha, beta, false, aiColor, limit - 1);
+      if (value > best) best = value;
+      if (value > alpha) alpha = value;
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+
+  let best = Infinity;
+  for (const move of ordered) {
+    const value = quiescence(applyMove(board, move), alpha, beta, true, aiColor, limit - 1);
+    if (value < best) best = value;
+    if (value < beta) beta = value;
+    if (beta <= alpha) break;
+  }
+  return best;
+}
+
 function minimax(
   board: BoardType,
   depth: number,
@@ -216,7 +281,7 @@ function minimax(
   }
 
   if (depth === 0) {
-    return evaluateBoard(board, aiColor);
+    return quiescence(board, alpha, beta, maximizingPlayer, aiColor, QUIESCENCE_LIMIT);
   }
 
   const ordered = orderMoves(moves);
