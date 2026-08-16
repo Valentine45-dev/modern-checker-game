@@ -41,8 +41,11 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
   },
   neon: {
     name: 'Neon',
-    lightColor: '#0F172A',
-    darkColor: '#1E293B',
+    // The two square colours used to be #0F172A and #1E293B — a contrast ratio
+    // of about 1.35:1, so the checkerboard was practically invisible. These sit
+    // at roughly 3.4:1 while keeping the dark, saturated look the theme wants.
+    lightColor: '#2A6F97',
+    darkColor: '#071018',
     borderColor: '#3B82F6',
     shadowColor: 'rgba(59, 130, 246, 0.3)',
     frameGradient: 'from-blue-900 via-blue-800 to-blue-900',

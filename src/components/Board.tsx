@@ -1,7 +1,7 @@
 import { Piece as PieceType, Position } from '../types';
 import Square from './Square';
 import { getGameSettings } from '../utils/gameSettings';
-import { getBoardTheme, getBoardFrameClasses, getBoardGridClasses } from '../utils/visualThemes';
+import { getBoardTheme, getPieceStyle, getBoardFrameClasses, getBoardGridClasses } from '../utils/visualThemes';
 
 interface BoardProps {
   board: (PieceType | null)[][];
@@ -14,9 +14,13 @@ interface BoardProps {
 }
 
 const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, shakingPieceId, piecesWithCaptures }: BoardProps) => {
+  // Read once for the whole board. Square and Piece used to call this
+  // themselves, which meant a synchronous localStorage read and JSON.parse per
+  // square and per piece — 64+ of them on every repaint.
   const gameSettings = getGameSettings();
   const boardTheme = getBoardTheme(gameSettings);
-  
+  const pieceStyle = getPieceStyle(gameSettings);
+
   const isValidMove = (row: number, col: number): boolean => {
     return validMoves.some(move => move.row === row && move.col === col);
   };
@@ -29,7 +33,7 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
     <div className="w-full max-w-2xl mx-auto">
       <div className={getBoardFrameClasses(boardTheme)}>
         <div className={getBoardGridClasses(boardTheme)}>
-          {board.map((row, rowIndex) => 
+          {board.map((row, rowIndex) =>
             row.map((piece, colIndex) => {
               const isLight = (rowIndex + colIndex) % 2 === 0;
               return (
@@ -45,6 +49,9 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
                   isShaking={piece !== null && piece.id === shakingPieceId}
                   hasCapture={piece !== null && piecesWithCaptures.has(piece.id)}
                   boardTheme={boardTheme}
+                  pieceStyle={pieceStyle}
+                  animationsEnabled={gameSettings.animationsEnabled}
+                  showMoveHints={gameSettings.showMoveHints}
                 />
               );
             })
@@ -56,4 +63,3 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
 };
 
 export default Board;
-

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Trophy, Crown, Repeat, Bot, Sparkles, RotateCcw, ArrowLeft } from 'lucide-react';
 import { GameState, Piece, Position, PlayerColor, Move, Board as BoardType, GameMode, PossibleMove } from '../types';
 import Board from './Board';
@@ -97,6 +97,11 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     return new Set(savedState?.piecesWithCaptures || []);
   });
   const { addToast, addConfirmDialog } = useToast();
+
+  // Latest state, for effects that need to read it without re-running when it
+  // changes (the clock replaces gameState every second).
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
 
   // Helper function to safely play sounds
   const playSound = (soundFunction: () => void) => {
@@ -606,11 +611,18 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     setPiecesWithCaptures(capturesMap);
   }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
 
-    // Auto-save game state after each move
+    // Auto-save after each move.
+    //
+    // This used to list `gameState` as a dependency. The clock ticks once a
+    // second and replaces that object, so the whole game — board, history,
+    // captured pieces — was being serialised and written to localStorage every
+    // second for the entire session rather than once per move. The effect now
+    // watches the fields that actually represent progress, and reads the full
+    // state through a ref so the saved snapshot is still current.
     useEffect(() => {
-      if (gameState.gameStatus === 'playing' && gameSettings.autoSave) {
+      if (gameStateRef.current.gameStatus === 'playing' && gameSettings.autoSave) {
         saveGameState(
-          gameState,
+          gameStateRef.current,
           turnNumber,
           gameStartTime,
           kingsPromoted,
@@ -624,7 +636,24 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           console.warn('Failed to auto-save game:', error);
         });
       }
-    }, [gameState, turnNumber, gameStartTime, kingsPromoted, multiJumpInProgress, currentJumpPiece, accumulatedCaptures, chainOrigin, aiThinking, piecesWithCaptures, gameSettings.autoSave]);
+      // gameState is deliberately absent: see above. The board, turn and status
+      // cover every change worth persisting.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+      gameState.board,
+      gameState.currentPlayer,
+      gameState.gameStatus,
+      gameState.moveHistory.length,
+      turnNumber,
+      gameStartTime,
+      kingsPromoted,
+      multiJumpInProgress,
+      currentJumpPiece,
+      accumulatedCaptures,
+      chainOrigin,
+      piecesWithCaptures,
+      gameSettings.autoSave,
+    ]);
 
   // Timer countdown
   useEffect(() => {

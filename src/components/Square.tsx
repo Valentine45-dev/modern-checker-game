@@ -1,8 +1,6 @@
-
 import { Piece as PieceType, Position } from '../types';
 import Piece from './Piece';
-import { getGameSettings } from '../utils/gameSettings';
-import { BoardTheme, getSquareColor } from '../utils/visualThemes';
+import { BoardTheme, PieceStyle, getSquareColor } from '../utils/visualThemes';
 
 interface SquareProps {
   position: Position;
@@ -15,26 +13,32 @@ interface SquareProps {
   isShaking: boolean;
   hasCapture: boolean;
   boardTheme: BoardTheme;
+  pieceStyle: PieceStyle;
+  animationsEnabled: boolean;
+  showMoveHints: boolean;
 }
 
-const Square = ({ 
-  position, 
-  piece, 
-  isLight, 
-  isValidMove, 
+const Square = ({
+  position,
+  piece,
+  isLight,
+  isValidMove,
   isSelected,
   onSquareClick,
   onPieceClick,
   isShaking,
   hasCapture,
-  boardTheme
+  boardTheme,
+  pieceStyle,
+  animationsEnabled,
+  showMoveHints,
 }: SquareProps) => {
-  const gameSettings = getGameSettings();
-  
   // Use theme-based colors
   const bgColor = getSquareColor(boardTheme, isLight);
   const hoverEffect = isValidMove ? 'hover:brightness-110 cursor-pointer' : piece ? 'cursor-pointer' : '';
-  
+
+  // This square owns the click for the whole cell. Piece deliberately has no
+  // handler of its own — when it did, every click fired twice.
   const handleClick = () => {
     if (piece) {
       onPieceClick(piece);
@@ -44,7 +48,7 @@ const Square = ({
   };
 
   return (
-    <div 
+    <div
       style={{ backgroundColor: bgColor }}
       className={`${hoverEffect} relative transition-all duration-200`}
       onClick={handleClick}
@@ -56,9 +60,11 @@ const Square = ({
             isSelected={isSelected}
             isShaking={isShaking}
             hasCapture={hasCapture}
+            pieceStyle={pieceStyle}
+            animationsEnabled={animationsEnabled}
           />
         )}
-        {isValidMove && !piece && gameSettings.showMoveHints && (
+        {isValidMove && !piece && showMoveHints && (
           <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-green-500/40 border-2 border-green-400/60 animate-pulse shadow-lg" />
         )}
       </div>
@@ -67,4 +73,3 @@ const Square = ({
 };
 
 export default Square;
-

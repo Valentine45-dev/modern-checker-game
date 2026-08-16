@@ -1,29 +1,30 @@
 import { Crown } from 'lucide-react';
 import { Piece as PieceType } from '../types';
-import { getGameSettings } from '../utils/gameSettings';
-import { getPieceStyle, getPieceClasses, getKingIconClasses } from '../utils/visualThemes';
+import { PieceStyle, getPieceClasses, getKingIconClasses } from '../utils/visualThemes';
 
 interface PieceProps {
   piece: PieceType;
   isSelected: boolean;
   isShaking: boolean;
   hasCapture: boolean;
+  pieceStyle: PieceStyle;
+  animationsEnabled: boolean;
 }
 
 // Note: this component deliberately has no onClick. The parent Square owns the
 // click for the whole cell — giving the piece its own handler made every click
 // fire twice (once here, once again as the event bubbled up to Square).
-const Piece = ({ piece, isSelected, isShaking, hasCapture }: PieceProps) => {
-  const gameSettings = getGameSettings();
-  const pieceStyle = getPieceStyle(gameSettings);
-
+//
+// Style and animation flags are passed in rather than read here, so the board
+// reads settings once instead of once per piece.
+const Piece = ({ piece, isSelected, isShaking, hasCapture, pieceStyle, animationsEnabled }: PieceProps) => {
   const className = getPieceClasses(
     pieceStyle,
     piece,
     isSelected,
     isShaking,
     hasCapture,
-    gameSettings.animationsEnabled
+    animationsEnabled
   );
 
   const label = `${piece.color} ${piece.type === 'king' ? 'king' : 'piece'}`;
