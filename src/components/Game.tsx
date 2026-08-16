@@ -7,6 +7,7 @@ import Controls from './Controls';
 import MoveHistory from './MoveHistory';
 import { ToastOutlet } from './ToastNotification';
 import { useToast } from './toastContext';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { AI_DIFFICULTIES, getAIThinkingMessage, getAIMoveComment } from '../utils/aiEngine';
 import { requestAIMove } from '../utils/aiClient';
 import { saveGameState, loadGameState, clearGameState, clearAllGameData } from '../utils/gamePersistence';
@@ -98,6 +99,10 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   });
   const { addToast, addConfirmDialog } = useToast();
 
+  // Keeps keyboard focus inside the game-over dialog while it is open, and
+  // restores it afterwards.
+  const gameOverRef = useFocusTrap<HTMLDivElement>(showGameOverModal);
+
   // Latest state, for effects that need to read it without re-running when it
   // changes (the clock replaces gameState every second).
   const gameStateRef = useRef(gameState);
@@ -185,6 +190,34 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         mustCapture: false 
       };
     }
+  }
+
+  /**
+   * Clear the current selection (Escape).
+   *
+   * Deliberately refuses mid-chain: once a multi-jump has started the rest of
+   * the sequence is mandatory, so letting Escape abandon it would allow an
+   * illegal half-finished turn.
+   */
+  function handleDeselect() {
+    if (multiJumpInProgress) {
+      addToast({
+        type: 'info',
+        message: 'Capture must be completed',
+        description: 'You have already started a jump and have to finish it.',
+        duration: 2500,
+      });
+      return;
+    }
+
+    if (!gameState.selectedPiece) return;
+
+    setGameState(prev => ({
+      ...prev,
+      selectedPiece: null,
+      validMoves: [],
+      possibleCaptures: [],
+    }));
   }
 
   // ============================================
@@ -1015,6 +1048,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
               onPieceClick={handlePieceClick}
               shakingPieceId={shakingPieceId}
               piecesWithCaptures={gameSettings.showCaptures ? piecesWithCaptures : new Set()}
+              onDeselect={handleDeselect}
             />
           
           {/* Multi-jump indicator */}
@@ -1077,10 +1111,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           is on screen for a moment before this covers the board. */}
       {showGameOverModal && gameState.winner && (
         <div
+          ref={gameOverRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-labelledby="game-over-title"
-          className={`fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto ${
+          className={`fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto outline-none ${
             gameSettings.animationsEnabled ? 'animate-game-over-backdrop' : ''
           }`}
         >

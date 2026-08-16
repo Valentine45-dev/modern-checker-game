@@ -12,12 +12,14 @@ interface BoardProps {
   onPieceClick: (piece: PieceType) => void;
   shakingPieceId: string | null;
   piecesWithCaptures: Set<string>;
+  /** Escape clears the current selection. */
+  onDeselect: () => void;
 }
 
 /** Where the keyboard cursor starts: the first playable square. */
 const INITIAL_CURSOR: Position = { row: 0, col: 1 };
 
-const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, shakingPieceId, piecesWithCaptures }: BoardProps) => {
+const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, shakingPieceId, piecesWithCaptures, onDeselect }: BoardProps) => {
   // Read once for the whole board. Square and Piece used to call this
   // themselves, which meant a synchronous localStorage read and JSON.parse per
   // square and per piece — 64+ of them on every repaint.
@@ -72,6 +74,7 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
       case 'ArrowDown': event.preventDefault(); moveCursor(1, 0); break;
       case 'ArrowLeft': event.preventDefault(); moveCursor(0, -1); break;
       case 'ArrowRight': event.preventDefault(); moveCursor(0, 1); break;
+      case 'Escape': event.preventDefault(); onDeselect(); break;
       default: break;
     }
   };
@@ -90,7 +93,7 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
         <div
           ref={gridRef}
           role="grid"
-          aria-label="Checkers board. Use the arrow keys to move between squares, then Enter to select a piece or play a move."
+          aria-label="Checkers board. Use the arrow keys to move between squares, then Enter to select a piece or play a move. Escape clears the selection."
           aria-rowcount={8}
           aria-colcount={8}
           onKeyDown={handleKeyDown}
