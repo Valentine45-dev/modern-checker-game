@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   gameSpeed: 'normal'
 };
 
-const SETTINGS_KEY = 'checkers-game-settings';
+export const SETTINGS_KEY = 'checkers-game-settings';
 
 export function getGameSettings(): GameSettings {
   try {

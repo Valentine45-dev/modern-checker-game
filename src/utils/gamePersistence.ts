@@ -1,5 +1,5 @@
 import { GameState, Piece, Position } from '../types';
-import { getGameSettings } from './gameSettings';
+import { getGameSettings, SETTINGS_KEY } from './gameSettings';
 
 const GAME_STATE_KEY = 'checkers-game-state';
 
@@ -121,27 +121,41 @@ export function getSavedGameMode(): string | null {
   }
 }
 
+/**
+ * Every localStorage key this app owns. localStorage is shared across the whole
+ * origin, so anything not on this list belongs to somebody else and must be left
+ * alone.
+ */
+export const OWNED_STORAGE_KEYS = [GAME_STATE_KEY, SETTINGS_KEY] as const;
+
+/**
+ * Clear the saved game, keeping user preferences.
+ *
+ * This used to scan localStorage and remove any key whose name merely contained
+ * "game" or "checkers". On a shared origin — a personal site, a staging domain,
+ * anything served from the same host — that would delete other applications'
+ * data. It now removes exactly one key, the one this module wrote.
+ */
 export function clearAllGameData(): void {
   try {
-    // Clear the main game state
     localStorage.removeItem(GAME_STATE_KEY);
-    
-    // Clear any other potential game-related data (but preserve settings)
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.includes('checkers') || key.includes('game'))) {
-        // Don't remove settings - preserve user preferences
-        if (key !== 'checkers-game-settings') {
-          keysToRemove.push(key);
-        }
-      }
-    }
-    
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    
-    console.log('All game data cleared from localStorage (settings preserved)');
   } catch (error) {
-    console.error('Failed to clear all game data:', error);
+    console.error('Failed to clear game data:', error);
+  }
+}
+
+/**
+ * Clear everything this app stores, settings included.
+ *
+ * Note this is not `localStorage.clear()`, which would wipe the entire origin
+ * rather than just this game's two keys.
+ */
+export function clearOwnedStorage(): void {
+  for (const key of OWNED_STORAGE_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error(`Failed to remove ${key}:`, error);
+    }
   }
 }

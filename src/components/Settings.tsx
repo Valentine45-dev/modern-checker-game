@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Volume2, Palette, Gamepad2, Monitor, Database, BarChart3, ArrowLeft } from 'lucide-react';
 import { GameSettings, getGameSettings, saveGameSettings, resetGameSettings, updateSoundSettings } from '../utils/gameSettings';
 import { soundManager } from '../utils/soundManager';
+import { clearOwnedStorage } from '../utils/gamePersistence';
+import { useToast } from './toastContext';
 
 interface SettingsProps {
   onBack: () => void;
@@ -9,6 +11,7 @@ interface SettingsProps {
 
 const Settings: React.FC<SettingsProps> = ({ onBack }) => {
   const [settings, setSettings] = useState<GameSettings>(getGameSettings());
+  const { addConfirmDialog } = useToast();
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -36,10 +39,21 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
   };
 
   const clearAllData = () => {
-    if (window.confirm('This will clear all saved games and settings. This action cannot be undone. Are you sure?')) {
-      localStorage.clear();
-      window.location.reload();
-    }
+    // Uses the app's own confirmation dialog rather than window.confirm, which
+    // was the only native browser prompt left in the UI.
+    addConfirmDialog({
+      message: 'Clear all data?',
+      description:
+        'This removes your saved game and resets every setting to its default. It cannot be undone.',
+      confirmText: 'Clear everything',
+      cancelText: 'Cancel',
+      onConfirm: () => {
+        // Not localStorage.clear(), which would wipe every key on this origin
+        // including data belonging to other apps served from the same host.
+        clearOwnedStorage();
+        window.location.reload();
+      },
+    });
   };
 
   return (
