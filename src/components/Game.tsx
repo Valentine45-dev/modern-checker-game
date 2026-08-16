@@ -74,6 +74,13 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     const savedState = loadGameState();
     return savedState?.accumulatedCaptures || [];
   });
+  // Where the current capture chain began. Without this the move history
+  // records a multi-jump as starting at its LAST hop, so a chain from 1,1 to
+  // 7,7 would read "5,5 -> 7,7".
+  const [chainOrigin, setChainOrigin] = useState<Position | null>(() => {
+    const savedState = loadGameState();
+    return savedState?.chainOrigin || null;
+  });
   const [aiThinking, setAiThinking] = useState(false);
   const [aiThinkingMessage, setAiThinkingMessage] = useState('');
   // Remaining hops of the capture chain the search picked, so the UI replays
@@ -324,6 +331,10 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     // Everything taken on the way here, plus anything from earlier hops
     const currentCaptures = [...accumulatedCaptures, ...resolved.captured];
 
+    // The square this whole sequence started from, so the move history shows
+    // the real origin rather than the last hop's square.
+    const origin = chainOrigin ?? piece.position;
+
     // Remove every piece captured along the resolved path
     for (const captured of resolved.captured) {
       newBoard[captured.position.row][captured.position.col] = null;
@@ -369,6 +380,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       setMultiJumpInProgress(true);
       setCurrentJumpPiece(movedPiece);
       setAccumulatedCaptures(currentCaptures);
+      setChainOrigin(origin);
 
       setGameState({
         ...gameState,
@@ -414,7 +426,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       playSound(() => soundManager.playCaptureSound());
       
       // Capture sequence complete
-      finalizeTurn(newBoard, newScore, piece.position, newPosition, currentCaptures, becameKing);
+      finalizeTurn(newBoard, newScore, origin, newPosition, currentCaptures, becameKing);
   }
 
   // Execute a normal move
@@ -474,6 +486,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     setMultiJumpInProgress(false);
     setCurrentJumpPiece(null);
     setAccumulatedCaptures([]);
+    setChainOrigin(null);
     
     // Create move record
     const move: Move = {
@@ -587,13 +600,14 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           multiJumpInProgress,
           currentJumpPiece,
           accumulatedCaptures,
+          chainOrigin,
           aiThinking,
           piecesWithCaptures
         ).catch(error => {
           console.warn('Failed to auto-save game:', error);
         });
       }
-    }, [gameState, turnNumber, gameStartTime, kingsPromoted, multiJumpInProgress, currentJumpPiece, accumulatedCaptures, aiThinking, piecesWithCaptures, gameSettings.autoSave]);
+    }, [gameState, turnNumber, gameStartTime, kingsPromoted, multiJumpInProgress, currentJumpPiece, accumulatedCaptures, chainOrigin, aiThinking, piecesWithCaptures, gameSettings.autoSave]);
 
   // Timer countdown
   useEffect(() => {
@@ -772,6 +786,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     setMultiJumpInProgress(false);
     setCurrentJumpPiece(null);
     setAccumulatedCaptures([]);
+    setChainOrigin(null);
     setAiThinking(false);
     setPiecesWithCaptures(new Set());
   }
