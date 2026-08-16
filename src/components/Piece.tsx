@@ -1,9 +1,9 @@
 import { Crown } from 'lucide-react';
-import { Piece as PieceType } from '../types';
+import { Piece as GamePiece } from '../types';
 import { PieceStyle, getPieceClasses, getKingIconClasses } from '../utils/visualThemes';
 
 interface PieceProps {
-  piece: PieceType;
+  piece: GamePiece;
   isSelected: boolean;
   isShaking: boolean;
   hasCapture: boolean;

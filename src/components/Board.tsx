@@ -1,15 +1,15 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Piece as PieceType, Position } from '../types';
+import { Piece as GamePiece, Position } from '../types';
 import Square from './Square';
 import { getGameSettings } from '../utils/gameSettings';
 import { getBoardTheme, getPieceStyle, getBoardFrameClasses, getBoardGridClasses } from '../utils/visualThemes';
 
 interface BoardProps {
-  board: (PieceType | null)[][];
-  selectedPiece: PieceType | null;
+  board: (GamePiece | null)[][];
+  selectedPiece: GamePiece | null;
   validMoves: Position[];
   onSquareClick: (position: Position) => void;
-  onPieceClick: (piece: PieceType) => void;
+  onPieceClick: (piece: GamePiece) => void;
   shakingPieceId: string | null;
   piecesWithCaptures: Set<string>;
   /** Escape clears the current selection. */
@@ -83,7 +83,7 @@ const Board = ({ board, selectedPiece, validMoves, onSquareClick, onPieceClick, 
     return validMoves.some(move => move.row === row && move.col === col);
   };
 
-  const isSelected = (piece: PieceType | null): boolean => {
+  const isSelected = (piece: GamePiece | null): boolean => {
     return piece !== null && selectedPiece !== null && piece.id === selectedPiece.id;
   };
 

@@ -157,7 +157,6 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       possibleCaptures: [],
       moveHistory: [],
       score: { red: 0, black: 0 },
-      capturedPieces: { red: [], black: [] },
       gameStatus: 'playing',
       gameMode: actualGameMode,
       mustCapture: false,

@@ -1,16 +1,16 @@
-import { Piece as PieceType, Position } from '../types';
+import { Piece as GamePiece, Position } from '../types';
 import Piece from './Piece';
 import { BoardTheme, PieceStyle, getSquareColor } from '../utils/visualThemes';
 import { squareName, isPlayableSquare } from '../utils/rules';
 
 interface SquareProps {
   position: Position;
-  piece: PieceType | null;
+  piece: GamePiece | null;
   isLight: boolean;
   isValidMove: boolean;
   isSelected: boolean;
   onSquareClick: (position: Position) => void;
-  onPieceClick: (piece: PieceType) => void;
+  onPieceClick: (piece: GamePiece) => void;
   isShaking: boolean;
   hasCapture: boolean;
   boardTheme: BoardTheme;
@@ -26,7 +26,7 @@ interface SquareProps {
 /** What a screen reader announces for this square. */
 function describe(
   position: Position,
-  piece: PieceType | null,
+  piece: GamePiece | null,
   isValidMove: boolean,
   isSelected: boolean
 ): string {

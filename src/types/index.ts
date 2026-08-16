@@ -16,7 +16,6 @@ export interface Position {
   col: number;
 }
 
-// Helper type for board coordinates (optional but useful)
 export type BoardSquare = Piece | null;
 export type Board = BoardSquare[][];
 
@@ -35,21 +34,30 @@ export interface Piece {
 // MOVE & CAPTURE
 // ============================================
 
+/** A completed turn, as recorded in the move history. */
 export interface Move {
+  /** Where the sequence began — not the last hop, for a multi-jump. */
   from: Position;
   to: Position;
-  capturedPieces?: Piece[]; // 🔥 Changed to array for multi-captures
+  /** Every piece taken, across the whole sequence. */
+  capturedPieces?: Piece[];
   becameKing?: boolean;
-  timestamp?: number; // For move history timing
-  isForced?: boolean; // To mark mandatory captures
+  timestamp?: number;
 }
 
-// For calculating possible moves
+/**
+ * One hop of a capture, with any further hops hanging off `continuations`.
+ *
+ * A node is not a move: `position` is where this single jump lands, and
+ * `capturedPieces` is what this jump alone takes. Use `enumerateMoves` or
+ * `resolveCapturePath` in rules.ts to get a whole turn — treating a node as a
+ * move is what caused both the AI and the board to lose pieces mid-chain.
+ */
 export interface PossibleMove {
   position: Position;
   isCapture: boolean;
   capturedPieces: Piece[];
-  continuations?: PossibleMove[]; // For multi-jump sequences
+  continuations?: PossibleMove[];
 }
 
 // ============================================
@@ -60,110 +68,25 @@ export interface GameState {
   board: Board;
   currentPlayer: PlayerColor;
   selectedPiece: Piece | null;
-  validMoves: Position[]; // 🤔 Consider changing to PossibleMove[]
-  possibleCaptures: PossibleMove[]; // 🔥 NEW: Track mandatory captures
+  /** Squares the selected piece may move to, capture landings included. */
+  validMoves: Position[];
+  /** Capture trees for the selected piece, when captures are available. */
+  possibleCaptures: PossibleMove[];
   moveHistory: Move[];
+  /** Pieces each side has captured. */
   score: {
     red: number;
     black: number;
   };
-  capturedPieces: {
-    red: Piece[];
-    black: Piece[];
-  }; // 🔥 NEW: Store actual captured pieces
   gameStatus: GameStatus;
-  gameMode: GameMode; // 🔥 NEW: Track game mode
+  gameMode: GameMode;
   winner?: PlayerColor;
-  turnStartTime?: number; // 🔥 NEW: For timer
+  /** When the current turn began, used to charge the clock. */
+  turnStartTime?: number;
+  /** Seconds remaining per player. Fractional: sub-second turns must still cost. */
   playerTimers?: {
     red: number;
     black: number;
-  }; // 🔥 NEW: Track elapsed time per player
-  mustCapture: boolean; // 🔥 NEW: Flag for mandatory capture rule
-}
-
-// ============================================
-// GAME SETTINGS
-// ============================================
-
-export interface GameSettings {
-  mode: GameMode;
-  timerEnabled: boolean;
-  timePerPlayer: number; // in seconds
-  soundEnabled: boolean;
-  showValidMoves: boolean;
-  showMoveHistory: boolean;
-  allowUndo: boolean;
-  flyingKings: boolean; // 🔥 International checkers rule
-}
-
-// ============================================
-// UI STATE (Optional - separate from game logic)
-// ============================================
-
-export interface UIState {
-  highlightedSquares: Position[];
-  animatingPiece?: {
-    piece: Piece;
-    from: Position;
-    to: Position;
   };
-  showingModal?: 'settings' | 'rules' | 'gameOver' | 'pause';
-  notification?: {
-    message: string;
-    type: 'info' | 'warning' | 'success' | 'error';
-  };
-}
-
-// ============================================
-// GAME RESULT
-// ============================================
-
-export interface GameResult {
-  winner: PlayerColor;
-  reason: 'no-pieces' | 'no-moves' | 'resignation' | 'timeout';
-  finalScore: {
-    red: number;
-    black: number;
-  };
-  totalMoves: number;
-  duration: number; // in seconds
-  capturedPieces: {
-    red: number;
-    black: number;
-  };
-  kingsPromoted: {
-    red: number;
-    black: number;
-  };
-}
-
-// ============================================
-// HELPER TYPES & UTILITIES
-// ============================================
-
-// For move validation
-export interface MoveValidation {
-  isValid: boolean;
-  reason?: string;
-  requiredCaptures?: PossibleMove[];
-}
-
-// For AI
-export interface AIMove {
-  move: Move;
-  score: number;
-  depth: number;
-}
-
-// For game statistics
-export interface GameStats {
-  gamesPlayed: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  winRate: number;
-  averageMovesPerGame: number;
-  longestGame: number;
-  shortestGame: number;
+  mustCapture: boolean;
 }
