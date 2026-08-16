@@ -3,7 +3,24 @@ import { getGameSettings, SETTINGS_KEY } from './gameSettings';
 
 const GAME_STATE_KEY = 'checkers-game-state';
 
+/**
+ * Bump whenever the saved shape changes in a way an older or newer build cannot
+ * read. A save whose version does not match exactly is discarded rather than
+ * guessed at.
+ *
+ * There is no migration path on purpose: the only thing at stake is a single
+ * game in progress, and silently restoring a half-understood board is worse
+ * than starting a new one. Settings live under a different key and are not
+ * affected.
+ *
+ * History: the shape gained `chainOrigin`, then fractional clocks, then
+ * `timerEnabled` in settings — all before this field existed, which is why
+ * anything unversioned is treated as unreadable.
+ */
+export const SAVE_SCHEMA_VERSION = 1;
+
 export interface SavedGameState extends GameState {
+  schemaVersion: number;
   turnNumber: number;
   gameStartTime: number;
   kingsPromoted: { red: number; black: number };
@@ -16,6 +33,68 @@ export interface SavedGameState extends GameState {
   // Visual settings
   boardTheme: string;
   pieceStyle: string;
+}
+
+const PLAYER_COLORS = ['red', 'black'];
+const GAME_MODES = ['pvp', 'ai-easy', 'ai-medium', 'ai-hard'];
+const GAME_STATUSES = ['menu', 'playing', 'paused', 'finished'];
+
+function isPiece(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const piece = value as Record<string, unknown>;
+  const position = piece.position as Record<string, unknown> | undefined;
+
+  return (
+    typeof piece.id === 'string' &&
+    PLAYER_COLORS.includes(piece.color as string) &&
+    (piece.type === 'normal' || piece.type === 'king') &&
+    typeof position === 'object' && position !== null &&
+    typeof position.row === 'number' &&
+    typeof position.col === 'number'
+  );
+}
+
+function isBoard(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length !== 8) return false;
+  return value.every(
+    row => Array.isArray(row) && row.length === 8 && row.every(cell => cell === null || isPiece(cell))
+  );
+}
+
+/**
+ * Parse a stored save, returning null if it is missing, corrupt, from another
+ * schema version, or structurally wrong.
+ *
+ * Kept pure and separate from localStorage so the validation can be tested
+ * directly. The previous version only checked that `board`, `currentPlayer` and
+ * `gameMode` were truthy, so a truncated or hand-edited board sailed through and
+ * crashed the game on render.
+ */
+export function parseSavedGame(raw: string | null): SavedGameState | null {
+  if (!raw) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const save = parsed as Record<string, unknown>;
+
+  if (save.schemaVersion !== SAVE_SCHEMA_VERSION) return null;
+  if (!isBoard(save.board)) return null;
+  if (!PLAYER_COLORS.includes(save.currentPlayer as string)) return null;
+  if (!GAME_MODES.includes(save.gameMode as string)) return null;
+  if (!GAME_STATUSES.includes(save.gameStatus as string)) return null;
+  if (!Array.isArray(save.moveHistory)) return null;
+
+  const score = save.score as Record<string, unknown> | undefined;
+  if (typeof score !== 'object' || score === null) return null;
+  if (typeof score.red !== 'number' || typeof score.black !== 'number') return null;
+
+  return save as unknown as SavedGameState;
 }
 
 /**
@@ -45,6 +124,7 @@ export function saveGameState(
 
     const savedState: SavedGameState = {
       ...gameState,
+      schemaVersion: SAVE_SCHEMA_VERSION,
       turnNumber,
       gameStartTime,
       kingsPromoted,
@@ -65,26 +145,33 @@ export function saveGameState(
   }
 }
 
-export function loadGameState(): SavedGameState | null {
+/**
+ * Read the stored save, removing it if it cannot be read.
+ *
+ * Every caller goes through here so an unreadable save is pruned once rather
+ * than lingering in storage forever because the only code path that cleaned it
+ * up happened to be the one nobody hit.
+ */
+function readStoredGame(): SavedGameState | null {
   try {
-    const saved = localStorage.getItem(GAME_STATE_KEY);
-    if (!saved) return null;
+    const raw = localStorage.getItem(GAME_STATE_KEY);
+    if (raw === null) return null;
 
-    const parsed = JSON.parse(saved) as SavedGameState;
-    
-    // Validate the loaded state has required properties
-    if (!parsed.board || !parsed.currentPlayer || !parsed.gameMode) {
-      console.warn('Invalid saved game state, clearing...');
+    const parsed = parseSavedGame(raw);
+    if (!parsed) {
       clearGameState();
       return null;
     }
-
     return parsed;
   } catch (error) {
-    console.error('Failed to load game state:', error);
+    console.error('Failed to read saved game:', error);
     clearGameState();
     return null;
   }
+}
+
+export function loadGameState(): SavedGameState | null {
+  return readStoredGame();
 }
 
 export function clearGameState(): void {
@@ -96,29 +183,11 @@ export function clearGameState(): void {
 }
 
 export function hasGameInProgress(): boolean {
-  try {
-    const saved = localStorage.getItem(GAME_STATE_KEY);
-    if (!saved) return false;
-
-    const parsed = JSON.parse(saved);
-    return parsed.gameStatus === 'playing';
-  } catch (error) {
-    console.error('Failed to check for saved game:', error);
-    return false;
-  }
+  return readStoredGame()?.gameStatus === 'playing';
 }
 
 export function getSavedGameMode(): string | null {
-  try {
-    const saved = localStorage.getItem(GAME_STATE_KEY);
-    if (!saved) return null;
-
-    const parsed = JSON.parse(saved);
-    return parsed.gameMode || null;
-  } catch (error) {
-    console.error('Failed to get saved game mode:', error);
-    return null;
-  }
+  return readStoredGame()?.gameMode ?? null;
 }
 
 /**
