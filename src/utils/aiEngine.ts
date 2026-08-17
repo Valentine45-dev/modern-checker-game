@@ -11,8 +11,27 @@ import {
 
 // AI difficulty settings
 export interface AIDifficulty {
-  /** Plies of search. Only meaningful now that deeper actually means stronger. */
+  /**
+   * Plies of search that are always completed, whatever the clock says. The
+   * floor for iterative deepening, so a tier can never play weaker than this.
+   */
   depth: number;
+  /**
+   * Ceiling for iterative deepening. Omit, or set equal to `depth`, to search a
+   * fixed depth and nothing deeper.
+   *
+   * Depth is not one cost — it depends entirely on how many pieces are left. The
+   * tree is enormous at 24 pieces and collapses to a handful of moves at six, so
+   * a depth that is expensive in the midgame is nearly free in an endgame. A
+   * fixed depth spends the same plies in both and leaves that headroom unused.
+   */
+  maxDepth?: number;
+  /**
+   * Wall-clock budget for the whole search, in milliseconds. Iterations past
+   * `depth` are abandoned when it runs out, and the last completed depth is
+   * played. Ignored when there is nothing deeper to try.
+   */
+  timeBudgetMs?: number;
   /** Cosmetic delay before the move appears, in milliseconds. */
   thinkingTime: number;
   /** Jitter added to root scores, in fractions of a piece. Blurs close calls. */
@@ -60,6 +79,14 @@ export const AI_DIFFICULTIES: Record<string, AIDifficulty> = {
   },
   'ai-hard': {
     depth: 7,
+    // Only Hard deepens. Easy and Medium keep a fixed depth on purpose: they are
+    // meant to be beatable, and letting them think harder in the endgame would
+    // quietly undo that.
+    maxDepth: 24,
+    // Hard already paces at 900ms and the search runs on a worker alongside that
+    // wait, so anything inside this budget is invisible to the player. Measured
+    // median at depth 7 was 298ms, leaving most of the budget unspent.
+    timeBudgetMs: 900,
     thinkingTime: 900,
     randomness: 0,
     blunderRate: 0,
@@ -267,6 +294,8 @@ function quiescence(
   aiColor: PlayerColor,
   limit: number
 ): number {
+  checkDeadline();
+
   const currentPlayer = maximizingPlayer ? aiColor : opponentOf(aiColor);
   const moves = enumerateMoves(board, currentPlayer);
 
@@ -322,6 +351,28 @@ const transpositionTable = new Map<string, TableEntry>();
 /** Cleared per root search, so it never grows without limit across a game. */
 const MAX_TABLE_ENTRIES = 200_000;
 
+/**
+ * Thrown to unwind out of a search whose time has run out. The half-finished
+ * iteration is discarded and the last completed depth is played, so an abandoned
+ * search can never produce a worse move than the one already in hand.
+ */
+const SEARCH_ABORTED = Symbol('search aborted');
+
+let searchDeadline = Infinity;
+let nodesVisited = 0;
+
+/**
+ * Give up if the budget is spent.
+ *
+ * Only sampled every 1024 nodes: `Date.now()` at every node costs more than the
+ * abort saves. At these node rates that is well under a millisecond of overrun.
+ */
+function checkDeadline(): void {
+  if ((++nodesVisited & 1023) === 0 && Date.now() >= searchDeadline) {
+    throw SEARCH_ABORTED;
+  }
+}
+
 function minimax(
   board: BoardType,
   depth: number,
@@ -330,6 +381,8 @@ function minimax(
   maximizingPlayer: boolean,
   aiColor: PlayerColor
 ): number {
+  checkDeadline();
+
   const currentPlayer = maximizingPlayer ? aiColor : opponentOf(aiColor);
 
   const key = hashPosition(board, currentPlayer);
@@ -430,40 +483,87 @@ export function calculateAIMove(
     };
   }
 
-  let bestMove: AIMove | null = null;
-  let bestScore = -Infinity;
-  let alpha = -Infinity;
+  const ordered = orderMoves(moves);
 
-  for (const move of orderMoves(moves)) {
-    const score = minimax(
-      applyMove(board, move),
-      difficulty.depth - 1,
-      alpha,
-      Infinity,
-      false,
-      aiColor
-    );
+  /**
+   * Search every root move to one fixed depth.
+   *
+   * Throws SEARCH_ABORTED if the deadline passes part-way through, in which case
+   * the caller keeps whatever the previous depth returned.
+   */
+  const searchToDepth = (depth: number): AIMove | null => {
+    let best: AIMove | null = null;
+    let bestScore = -Infinity;
+    let alpha = -Infinity;
 
-    // Randomness is what makes the easier tiers make mistakes. It is applied
-    // only at the root so it perturbs the choice, never the search itself.
-    const randomFactor = (Math.random() - 0.5) * difficulty.randomness * 100;
-    const adjustedScore = score + randomFactor;
+    for (const move of ordered) {
+      const score = minimax(applyMove(board, move), depth - 1, alpha, Infinity, false, aiColor);
 
-    if (adjustedScore > bestScore) {
-      bestScore = adjustedScore;
-      // Carry the whole sequence, so the UI replays the exact chain the search
-      // chose rather than re-deciding hop by hop.
-      bestMove = {
-        piece: findPieceById(board, move.pieceId) ?? board[move.from.row][move.from.col]!,
-        targetPosition: move.to,
-        move,
-        score: adjustedScore,
-        depth: difficulty.depth,
-      };
+      // Randomness is what makes the easier tiers make mistakes. It is applied
+      // only at the root so it perturbs the choice, never the search itself.
+      const randomFactor = (Math.random() - 0.5) * difficulty.randomness * 100;
+      const adjustedScore = score + randomFactor;
+
+      if (adjustedScore > bestScore) {
+        bestScore = adjustedScore;
+        // Carry the whole sequence, so the UI replays the exact chain the search
+        // chose rather than re-deciding hop by hop.
+        best = {
+          piece: findPieceById(board, move.pieceId) ?? board[move.from.row][move.from.col]!,
+          targetPosition: move.to,
+          move,
+          score: adjustedScore,
+          depth,
+        };
+      }
+      // Root alpha still tightens the window for later siblings.
+      if (score > alpha) alpha = score;
     }
-    // Root alpha still tightens the window for later siblings.
-    if (score > alpha) alpha = score;
+
+    return best;
+  };
+
+  /**
+   * Iterative deepening.
+   *
+   * Deliberately starts *at* the configured depth rather than at 1. This engine
+   * does not use the transposition table for move ordering, so the shallow
+   * warm-up passes that normally pay for themselves would here be pure overhead.
+   * Starting at the floor means the first iteration is exactly the search that
+   * shipped before, and every iteration after it is spare time that used to go
+   * unused — so this can add strength but cannot subtract any.
+   */
+  const ceiling = Math.max(difficulty.depth, difficulty.maxDepth ?? difficulty.depth);
+  const budget = difficulty.timeBudgetMs;
+
+  let bestMove: AIMove | null = null;
+
+  for (let depth = difficulty.depth; depth <= ceiling; depth++) {
+    // The floor is guaranteed; only the extra iterations answer to the clock.
+    searchDeadline = depth === difficulty.depth || budget === undefined
+      ? Infinity
+      : startTime + budget;
+
+    try {
+      const result = searchToDepth(depth);
+      if (result) bestMove = result;
+    } catch (error) {
+      if (error === SEARCH_ABORTED) break;
+      throw error;
+    }
+
+    // A forced result is already proven; more depth cannot improve on it.
+    if (bestMove && Math.abs(bestMove.score) >= WIN_SCORE) break;
+
+    if (budget !== undefined) {
+      const spent = Date.now() - startTime;
+      // Each extra ply costs several times the last, so an iteration started
+      // with only a sliver of the budget left is one that will be thrown away.
+      if (spent >= budget * 0.4) break;
+    }
   }
+
+  searchDeadline = Infinity;
 
   if (bestMove) {
     bestMove.elapsedMs = Date.now() - startTime;

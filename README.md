@@ -132,6 +132,13 @@ picks a worse capture rather than an illegal move.
   before evaluating, so it never scores a position mid-trade.
 - **Move ordering.** Longest capture chains first, then promotions, so alpha-beta prunes
   effectively.
+- **Iterative deepening (Hard only).** Depth is not one cost: the tree is enormous with 24
+  pieces on the board and collapses to a handful of moves with six, so a depth that is
+  expensive in the midgame is nearly free in an endgame. Hard searches its guaranteed depth
+  of 7 and then keeps deepening while its 900ms budget lasts, abandoning any iteration that
+  runs out of time and playing the last depth it completed. In practice it reaches 9–10
+  plies in the midgame and 16–18 with four pieces left. Easy and Medium keep a fixed depth
+  on purpose — they are meant to be beatable.
 - **Transposition table.** Positions are keyed by a Zobrist hash of the board plus the side
   to move, with entries tagged as exact scores or as bounds.
 - **Web Worker.** The search runs on a separate thread and is issued in parallel with the
@@ -167,6 +174,17 @@ Together they score **57.8%** against the previous weights at depth 4 and **58.3
 depth 6, over 500 and 240 games respectively — roughly a 55-point Elo gain. The remaining
 weights were tested and left alone: `EDGE_PENALTY` measured as already optimal, and
 `MOBILITY`, `SAFE_PIECE` and `CAPTURE_THREAT` showed no reliable effect.
+
+### Search budget
+
+Letting Hard spend its idle time on further plies, rather than stopping at a fixed depth,
+scores **60% ± 5.9** against the fixed-depth version over 110 games — about +70 Elo. The
+same change measured at a lower floor, where the relative jump in depth is larger, scores
+67.7% ± 4.0 over 300 games.
+
+It costs the player nothing. AI replies still land in 942–964ms against 954–976ms before,
+because the search already ran on a worker alongside a 900ms pause and was leaving most of
+that budget unspent.
 
 It is still not unbeatable: there is no opening book and no endgame knowledge.
 
