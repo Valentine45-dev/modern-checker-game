@@ -93,8 +93,18 @@ A5, empty, available move
 B5, unplayable square
 ```
 
-Known gap: there is no live region describing the opponent's move. A move raises a toast,
-which is announced, but it does not say which squares were involved.
+Each completed turn is also announced through a live region:
+
+```
+Move 12. AI moved D6 to C5, capturing 1 piece.
+Move 13. You moved A1 to G7, capturing 3 pieces.
+Move 14. Black moved C7 to B8, and was crowned king.
+```
+
+It describes a whole turn rather than each hop, so a multi-jump is announced once, when
+the sequence finishes. The move number is there because `aria-live` only speaks on a
+change of content — without it, a move that happened to read the same as the previous one
+would pass in silence.
 
 ---
 
@@ -256,8 +266,6 @@ Web Audio API, Web Workers, `localStorage`.
 
 ## Not yet implemented
 
-- No live region announcing the opponent's move, so a screen reader hears that a move
-  happened but not where.
 - There is no opening book and no endgame database, so the AI plays the first and last
   few moves purely from search.
 

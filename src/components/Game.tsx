@@ -25,6 +25,7 @@ import {
   promotionRow,
   opponentOf,
   findWinner,
+  squareName,
 } from '../utils/rules';
 
 interface GameProps {
@@ -529,6 +530,47 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     isAIGame,
     aiColor,
   ]);
+
+  /**
+   * Spoken description of the last completed turn.
+   *
+   * Without this a screen reader knows a move happened — the thinking banner
+   * goes away, a toast fires — but not what it was, so finding the change meant
+   * arrowing across the board every turn.
+   *
+   * Built from the move history rather than from the board, so a multi-jump is
+   * announced once, as a whole turn, instead of once per hop: history is only
+   * appended when the chain finishes.
+   *
+   * The leading move number is not decoration. `aria-live` announces on content
+   * *change*, so a move whose description matches the previous one would be
+   * silently swallowed; the number guarantees every turn differs, and doubles as
+   * a position in the game.
+   */
+  const moveAnnouncement = useMemo(() => {
+    const last = gameState.moveHistory[gameState.moveHistory.length - 1];
+    if (!last) return '';
+
+    // finalizeTurn has already handed the turn over, so the mover is the side
+    // that is *not* to move.
+    const mover = opponentOf(gameState.currentPlayer);
+    const moverName = isAIGame
+      ? mover === aiColor ? 'AI' : 'You'
+      : mover === 'red' ? 'Red' : 'Black';
+
+    const parts = [
+      `Move ${gameState.moveHistory.length}. ${moverName} moved ` +
+      `${squareName(last.from.row, last.from.col)} to ${squareName(last.to.row, last.to.col)}`,
+    ];
+
+    const captured = last.capturedPieces?.length ?? 0;
+    if (captured > 0) {
+      parts.push(`capturing ${captured} ${captured === 1 ? 'piece' : 'pieces'}`);
+    }
+    if (last.becameKing) parts.push('and was crowned king');
+
+    return parts.join(', ') + '.';
+  }, [gameState.moveHistory, gameState.currentPlayer, isAIGame, aiColor]);
 
   /** C pressed with nothing to jump to. */
   function handleNoCaptures() {
@@ -1352,6 +1394,13 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   return (
     <main className="flex-grow flex items-center justify-center py-4 sm:py-8 px-2 sm:px-4 lg:px-8">
+      {/* Announces each completed turn. Lives outside the board so that
+          re-rendering the grid cannot disturb it, and `polite` so it waits for a
+          pause rather than cutting across whatever is being read. */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {moveAnnouncement}
+      </div>
+
       <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-center gap-4 sm:gap-6 lg:gap-8">
         {/* Board */}
         <div className="w-full lg:flex-1 max-w-3xl">
