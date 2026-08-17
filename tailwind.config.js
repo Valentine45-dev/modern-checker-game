@@ -9,6 +9,13 @@ export default {
     extend: {
       colors: {
         primary: "#141414",
+        // Foreground accent.
+        //
+        // `primary` is a near-black meant for surfaces and button fills. Used as
+        // a *text* colour it sat at 1.04:1 against this app's dark background —
+        // indistinguishable from it. Anything that needs to be read or seen uses
+        // this instead, which measures about 10:1 on the same background.
+        accent: "#fbbf24",
         "background-light": "#f7f7f7",
         "background-dark": "#191919",
         "board-light": "#EADCCF",

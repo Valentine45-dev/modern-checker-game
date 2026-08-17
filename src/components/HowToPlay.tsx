@@ -35,7 +35,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Game Overview */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Target className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Target className="w-7 h-7 text-accent" aria-hidden="true" />
               Game Overview
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
@@ -48,7 +48,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Game Modes */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Gamepad2 className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Gamepad2 className="w-7 h-7 text-accent" aria-hidden="true" />
               Game Modes
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
@@ -70,7 +70,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Basic Rules */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <ClipboardList className="w-7 h-7 text-primary" aria-hidden="true" />
+              <ClipboardList className="w-7 h-7 text-accent" aria-hidden="true" />
               Basic Rules
             </h2>
             <div className="space-y-4">
@@ -108,7 +108,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Advanced Features */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Zap className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Zap className="w-7 h-7 text-accent" aria-hidden="true" />
               Advanced Features
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
@@ -130,22 +130,22 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Game Controls */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <SlidersHorizontal className="w-7 h-7 text-primary" aria-hidden="true" />
+              <SlidersHorizontal className="w-7 h-7 text-accent" aria-hidden="true" />
               Game Controls
             </h2>
             <div className="grid md:grid-cols-3 gap-4">
               <div className="bg-gray-500/10 rounded-lg p-4 border border-gray-500/20 text-center">
-                <div className="mb-2 flex justify-center"><MousePointerClick className="w-6 h-6 text-primary" aria-hidden="true" /></div>
+                <div className="mb-2 flex justify-center"><MousePointerClick className="w-6 h-6 text-accent" aria-hidden="true" /></div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Click to Select</h3>
                 <p className="text-gray-200 text-xs">Click on your piece to select it and see available moves</p>
               </div>
               <div className="bg-gray-500/10 rounded-lg p-4 border border-gray-500/20 text-center">
-                <div className="mb-2 flex justify-center"><Target className="w-6 h-6 text-primary" aria-hidden="true" /></div>
+                <div className="mb-2 flex justify-center"><Target className="w-6 h-6 text-accent" aria-hidden="true" /></div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Click to Move</h3>
                 <p className="text-gray-200 text-xs">Click on a highlighted square to move your piece</p>
               </div>
               <div className="bg-gray-500/10 rounded-lg p-4 border border-gray-500/20 text-center">
-                <div className="mb-2 flex justify-center"><Sparkles className="w-6 h-6 text-primary" aria-hidden="true" /></div>
+                <div className="mb-2 flex justify-center"><Sparkles className="w-6 h-6 text-accent" aria-hidden="true" /></div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Auto-Save</h3>
                 <p className="text-gray-200 text-xs">Your game is automatically saved after every move</p>
               </div>
@@ -155,7 +155,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Visual Indicators */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Lightbulb className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Lightbulb className="w-7 h-7 text-accent" aria-hidden="true" />
               Visual Indicators
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
@@ -185,7 +185,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Winning Conditions */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Trophy className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Trophy className="w-7 h-7 text-accent" aria-hidden="true" />
               Winning the Game
             </h2>
             <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 rounded-lg p-6 border border-yellow-500/20">
@@ -214,7 +214,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
           {/* Tips */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Lightbulb className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Lightbulb className="w-7 h-7 text-accent" aria-hidden="true" />
               Pro Tips
             </h2>
             <div className="grid md:grid-cols-3 gap-4">

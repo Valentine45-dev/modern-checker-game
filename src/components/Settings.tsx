@@ -103,7 +103,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Audio Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Volume2 className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Volume2 className="w-7 h-7 text-accent" aria-hidden="true" />
               Audio Settings
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
@@ -155,7 +155,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                           console.warn('Failed to play test sound:', error);
                         }
                       }}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-lg transition-all duration-200 text-sm"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-accent border border-primary/30 rounded-lg transition-all duration-200 text-sm"
                     >
                       <Volume2 className="w-4 h-4" aria-hidden="true" />
                       Test Sound
@@ -169,7 +169,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Visual Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Palette className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Palette className="w-7 h-7 text-accent" aria-hidden="true" />
               Visual Settings
             </h2>
             <div className="space-y-4">
@@ -226,7 +226,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Gameplay Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Gamepad2 className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Gamepad2 className="w-7 h-7 text-accent" aria-hidden="true" />
               Gameplay Settings
             </h2>
             <div className="space-y-4">
@@ -314,7 +314,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* UI Settings */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Monitor className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Monitor className="w-7 h-7 text-accent" aria-hidden="true" />
               UI Settings
             </h2>
             <div className="space-y-4">
@@ -359,7 +359,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Data Management */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <Database className="w-7 h-7 text-primary" aria-hidden="true" />
+              <Database className="w-7 h-7 text-accent" aria-hidden="true" />
               Data Management
             </h2>
             <div className="grid md:grid-cols-2 gap-4">
@@ -390,7 +390,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
           {/* Game Statistics */}
           <section>
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-              <BarChart3 className="w-7 h-7 text-primary" aria-hidden="true" />
+              <BarChart3 className="w-7 h-7 text-accent" aria-hidden="true" />
               Game Statistics
             </h2>
             <div className="bg-primary/10 rounded-lg p-6 border border-primary/20">
@@ -399,15 +399,15 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                   "win" there would make the rate meaningless. */}
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary mb-2">{summary.gamesPlayed}</div>
+                  <div className="text-3xl font-bold text-accent mb-2">{summary.gamesPlayed}</div>
                   <div className="text-sm text-gray-300">Games Played</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary mb-2">{summary.aiWon}</div>
+                  <div className="text-3xl font-bold text-accent mb-2">{summary.aiWon}</div>
                   <div className="text-sm text-gray-300">Wins vs AI</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary mb-2">
+                  <div className="text-3xl font-bold text-accent mb-2">
                     {/* An em dash, not 0% — nobody has lost every game they
                         never played. */}
                     {summary.winRate === null ? '—' : `${summary.winRate}%`}
