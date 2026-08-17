@@ -78,16 +78,40 @@ export interface AIMove {
 }
 
 // Board evaluation weights
+/**
+ * Evaluation weights, in centipawns: a man is 100.
+ *
+ * These were previously hand-nudged — every comment read "Increased X
+ * importance" — and never measured. They are now the outcome of ~13,000 games
+ * of self-play at fixed depth, each configuration against the shipped engine
+ * over varied openings with colours swapped. See audit.md §29 for the runs.
+ *
+ * Four values changed. The other five were tested and left alone: EDGE_PENALTY
+ * measured as already optimal (both directions lost), MOBILITY's apparent gain
+ * did not survive a wider range, and PIECE, SAFE_PIECE and CAPTURE_THREAT
+ * showed no measurable effect either way.
+ */
 const WEIGHTS = {
   PIECE: 100,
-  KING: 180,              // Increased king value
-  BACK_ROW: 20,           // Increased back row protection
-  MIDDLE_CONTROL: 15,     // Increased center control importance
-  ADVANCED_POSITION: 8,   // Increased advancement bonus
-  EDGE_PENALTY: -15,      // Increased edge penalty
-  SAFE_PIECE: 10,         // Increased safety importance
-  MOBILITY: 5,            // Increased mobility importance
-  CAPTURE_THREAT: 15,     // New: Bonus for threatening captures
+  // 1.8x a man was too cheap for *flying* kings, which are far stronger than
+  // the short-range kind. Measured peak: 300 (54.8%), falling away by 440.
+  KING: 300,
+  // Defending the back row is worth more than it was paid. Peak at 35 (56.3%);
+  // 50 and 70 give the gain back.
+  BACK_ROW: 35,
+  // Counter-intuitive, and the largest single effect found. The bonus applies to
+  // any piece in the middle 4x4 whether or not it is supported, so a high value
+  // pays pieces to sit in contested squares and be traded off. 5 scored 56.8%,
+  // 30 scored 46.7%.
+  MIDDLE_CONTROL: 5,
+  // At 8 per row a man seven rows up was worth +56 — over half a piece — purely
+  // for being near promotion, which bought races that were not worth entering.
+  // Monotone across 12/8/4/2: 47.0 / 50 / 54.0 / 55.7%.
+  ADVANCED_POSITION: 2,
+  EDGE_PENALTY: -15,
+  SAFE_PIECE: 10,
+  MOBILITY: 5,
+  CAPTURE_THREAT: 15,
 };
 
 // ============================================
@@ -188,7 +212,14 @@ function evaluateBoard(board: BoardType, aiColor: PlayerColor): number {
   
   score += aiCaptureCount * WEIGHTS.CAPTURE_THREAT;
   score -= opponentCaptureCount * WEIGHTS.CAPTURE_THREAT; // Penalty if opponent can capture
-  
+
+  // A "trade down when ahead" term was tried here — scaling the material lead by
+  // how many pieces had come off, so exchanges look good when winning and bad
+  // when losing. It measured as nothing at all: 50.3 / 50.8 / 49.5 / 50.0% over
+  // 1,200 games across an 8x range of weights. The reasoning was sound but the
+  // search already sees those positions concretely at these depths, so it does
+  // not need the hint. Removed rather than shipped inert.
+
   return score;
 }
 

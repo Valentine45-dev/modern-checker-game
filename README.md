@@ -131,9 +131,27 @@ Measured against a fixed, independently written reference engine, alternating co
 | Medium | 45% | 25% |
 | Hard | 100% | 100% |
 
-Hard also scores 100% against a reference searching to its own depth of 7. It is not
-unbeatable: there is no opening book, no endgame knowledge, and the positional evaluation
-weights have not been tuned against play.
+Hard also scores 100% against a reference searching to its own depth of 7.
+
+### Evaluation tuning
+
+The positional weights were tuned by self-play rather than by hand. Each candidate played
+the shipped engine over varied random openings, every opening played twice with colours
+swapped, across roughly 13,000 games. Four weights changed:
+
+| Weight | Was | Now | Effect |
+| --- | --- | --- | --- |
+| `KING` | 180 | 300 | 54.8% |
+| `BACK_ROW` | 20 | 35 | 56.3% |
+| `MIDDLE_CONTROL` | 15 | 5 | 56.8% |
+| `ADVANCED_POSITION` | 8 | 2 | 55.7% |
+
+Together they score **57.8%** against the previous weights at depth 4 and **58.3%** at
+depth 6, over 500 and 240 games respectively — roughly a 55-point Elo gain. The remaining
+weights were tested and left alone: `EDGE_PENALTY` measured as already optimal, and
+`MOBILITY`, `SAFE_PIECE` and `CAPTURE_THREAT` showed no reliable effect.
+
+It is still not unbeatable: there is no opening book and no endgame knowledge.
 
 ---
 
@@ -231,10 +249,8 @@ Other known gaps:
 
 - No live region announcing the opponent's move, so a screen reader hears that a move
   happened but not where.
-- Saved games are not schema-versioned, so a save written by an older build restores
-  unchecked.
-- The AI's positional evaluation weights have never been tuned against play; only the
-  search around them has been.
+- There is no opening book and no endgame database, so the AI plays the first and last
+  few moves purely from search.
 
 ---
 
