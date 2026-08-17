@@ -1231,11 +1231,36 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     return 'Close Match!';
   }
 
-  // Get performance rating
-  function getPerformanceRating(winner: PlayerColor): string {
+  /**
+   * The line under the result.
+   *
+   * This used to be the fixed string "Congratulations, you have successfully
+   * conquered the board", shown whoever won — so losing 12-4 to the AI
+   * congratulated you on conquering the board.
+   */
+  function getOutcomeMessage(): string {
+    if (!isAIGame) {
+      // Both sides are played on this device, so there is no "you" to address.
+      return `${gameState.winner === 'red' ? 'Red' : 'Black'} takes the board.`;
+    }
+    return gameState.winner === aiColor
+      ? 'The AI takes this one. Another go?'
+      : 'Congratulations, you have successfully conquered the board.';
+  }
+
+  /**
+   * Rate a player's game from what they achieved.
+   *
+   * `subject` matters: this was previously called with the *winner*, but
+   * displayed unlabelled as though it described the person reading it. Losing
+   * badly to the AI produced "Great Performance!" — praise for the AI's twelve
+   * captures, shown to the player who had just been beaten. In an AI game it now
+   * rates the human; in PvP it rates the winner, whose name is displayed with it.
+   */
+  function getPerformanceRating(subject: PlayerColor): string {
     const moveCount = gameState.moveHistory.length;
-    const captures = gameState.score[winner];
-    
+    const captures = gameState.score[subject];
+
     if (captures >= 10 && moveCount < 30) return 'Excellent Play! 🌟';
     if (captures >= 8) return 'Great Performance! 🎯';
     if (captures >= 5) return 'Good Effort! 👍';
@@ -1409,7 +1434,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
                 {getVictoryMessage()}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-500">
-                Congratulations, you have successfully conquered the board.
+                {getOutcomeMessage()}
               </p>
             </div>
 
@@ -1417,8 +1442,15 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             <div className="p-4 space-y-3">
               {/* Performance Rating */}
               <div className="text-center p-2 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
+                {/* In PvP the rating needs a name against it, or it reads as a
+                    verdict on whoever happens to be looking at the screen. */}
+                {!isAIGame && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {gameState.winner === 'red' ? 'Red' : 'Black'} Player
+                  </p>
+                )}
                 <p className="text-base font-bold text-gray-900 dark:text-white">
-                  {getPerformanceRating(gameState.winner)}
+                  {getPerformanceRating(isAIGame ? opponentOf(aiColor) : gameState.winner!)}
                 </p>
               </div>
 
