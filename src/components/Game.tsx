@@ -124,6 +124,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   // button simply isn't offered after a resume until you move again.
   const [undoStack, setUndoStack] = useState<TurnSnapshot[]>([]);
   const [aiThinking, setAiThinking] = useState(false);
+  // Whether a search currently owns the turn. Held in a ref rather than read
+  // from `aiThinking` so the guard can never see a stale value — see the AI
+  // effect for why that mattered.
+  const aiSearchRef = useRef(false);
+  // Identifies each search, so an abandoned one cannot release a newer one.
+  const aiRunIdRef = useRef(0);
   const [aiThinkingMessage, setAiThinkingMessage] = useState('');
   // Remaining hops of the capture chain the search picked, so the UI replays
   // exactly that sequence instead of re-choosing at each jump.
@@ -1055,8 +1061,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       return;
     }
 
-    // Don't trigger if already thinking (prevents duplicate calls)
-    if (aiThinking) {
+    // Re-entrancy guard. This reads a ref, not the `aiThinking` state, because
+    // state here is the value from the render that created this effect, and
+    // `aiThinking` is deliberately not a dependency. A stale `true` would make
+    // this return forever with nothing able to re-trigger it — which is exactly
+    // how the board used to lock up. A ref is always current.
+    if (aiSearchRef.current) {
       return;
     }
 
@@ -1075,8 +1085,23 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     // Show thinking state. No toast here on purpose — the board already renders
     // an "AI is thinking..." banner, and a toast saying the same thing was just
     // extra noise stacking up over the game.
+    const runId = ++aiRunIdRef.current;
+    aiSearchRef.current = true;
     setAiThinking(true);
     setAiThinkingMessage(getAIThinkingMessage(actualGameMode));
+
+    /**
+     * Release the turn, unless a newer search has already claimed it.
+     *
+     * The run id matters: an abandoned search finishes its await *after* the
+     * replacement has started, and without this check it would clear the newer
+     * search's flag and let a second search run concurrently.
+     */
+    const finish = () => {
+      if (aiRunIdRef.current !== runId) return;
+      aiSearchRef.current = false;
+      setAiThinking(false);
+    };
 
     // Cancelled if the effect re-runs (new turn, unmount) before we finish, so a
     // stale worker reply can never be applied to a board that has moved on.
@@ -1110,7 +1135,6 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             setCurrentJumpPiece(null);
             setAiPlannedPath([]);
           }
-          setAiThinking(false);
           return;
         }
 
@@ -1126,14 +1150,12 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
         if (!aiMove) {
           console.error('AI could not calculate a move');
-          setAiThinking(false);
           return;
         }
 
         const piece = gameState.board[aiMove.move.from.row][aiMove.move.from.col];
         if (!piece) {
           console.error('AI piece not found on board at position:', aiMove.move.from);
-          setAiThinking(false);
           return;
         }
 
@@ -1147,7 +1169,6 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             executeCapture(piece, resolved.node.position, resolved);
           } else {
             console.error('AI planned a capture the board does not offer', firstHop);
-            setAiThinking(false);
             return;
           }
         } else {
@@ -1171,14 +1192,24 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         }, 300);
 
         playSound(() => soundManager.playAIMoveSound());
-        setAiThinking(false);
       } catch (error) {
         console.error('AI Error:', error);
-        setAiThinking(false);
+      } finally {
+        // Every exit path releases the turn, including the `cancelled` returns.
+        // Those used to return without clearing it, which stranded the flag and
+        // hard-locked the board: it stayed the player's turn, but every click
+        // was refused with "AI is thinking".
+        finish();
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // An abandoned search must not hold the turn either. If the replacement
+      // run returns early — the usual case, since the turn has passed back to
+      // the player — nothing else would ever release it.
+      finish();
+    };
   // aiPlannedPath has to be here: during a chain, multiJumpInProgress stays
   // true from the second hop onwards, so without a dependency that actually
   // changes each hop this effect never re-fires and the AI freezes mid-chain
