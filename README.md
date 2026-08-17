@@ -71,8 +71,15 @@ The board is a single tab stop, not sixty-four. Tab to it, then:
 | --- | --- |
 | Arrow keys | Move the cursor one square |
 | Enter or Space | Select a piece, then play a move |
+| C | Jump to a piece that can capture, and select it. Press again for the next one |
+| Shift + C | Same, cycling backwards |
 | Escape | Clear the selection |
 | Tab | Leave the board for the sidebar controls |
+
+Captures are mandatory, so when one exists those pieces are the only ones that can be
+played at all. `C` cycles through them in reading order and wraps, rather than guessing
+which one you meant — finding them by arrowing across the board otherwise means crossing
+up to sixty-four squares.
 
 Escape deliberately refuses part-way through a multi-jump, because the rest of a capture
 sequence is mandatory.
@@ -166,6 +173,11 @@ It is still not unbeatable: there is no opening book and no endgame knowledge.
   the tab is hidden, so switching away mid-turn costs nothing
 - Automatic save to `localStorage` and resume from the main menu
 - Move hints and mandatory-capture indicators, both toggleable
+- Optional undo, off by default. Against the AI it takes back your move and the AI's
+  reply, since undoing a single ply would just hand the turn straight back. Covers the
+  current session only
+- Lifetime statistics: games played, and wins and win rate against the AI. PvP games count
+  as played but attribute no win, because both sides are played on the same device
 - In-game rules reference
 
 ---
@@ -180,7 +192,7 @@ src/
 │   ├── Square.tsx            One cell; owns the click for that cell
 │   ├── Piece.tsx             Piece rendering
 │   ├── GameInfo.tsx          Player cards, captures, clocks
-│   ├── Controls.tsx          New game, resign, quit
+│   ├── Controls.tsx          New game, undo, resign, quit
 │   ├── MoveHistory.tsx       Recent moves
 │   ├── MainMenu.tsx          Main menu with resume
 │   ├── GameModeSelection.tsx Mode picker
@@ -196,7 +208,11 @@ src/
 │   ├── aiClient.ts           Worker client with in-process fallback
 │   ├── gamePersistence.ts    Save and load
 │   ├── gameSettings.ts       Settings
+│   ├── gameStats.ts          Lifetime win/loss record
+│   ├── boardNavigation.ts    Keyboard capture-cycling order
+│   ├── labels.ts             Shared human-readable strings
 │   ├── soundManager.ts       Web Audio sound effects
+│   ├── audioEnvelope.ts      Gain envelope maths
 │   └── visualThemes.ts       Board themes and piece styles
 ├── types/index.ts            Shared types
 └── main.tsx                  Entry point
@@ -239,13 +255,6 @@ Web Audio API, Web Workers, `localStorage`.
 ---
 
 ## Not yet implemented
-
-Visible in the UI but not functional:
-
-- **Undo** — the control exists but is disabled.
-- **Game statistics** — the Settings panel shows placeholder zeroes.
-
-Other known gaps:
 
 - No live region announcing the opponent's move, so a screen reader hears that a move
   happened but not where.
