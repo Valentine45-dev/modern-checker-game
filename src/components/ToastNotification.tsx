@@ -44,9 +44,27 @@ export const ToastOutlet: React.FC<{ className?: string }> = ({ className = '' }
     return () => registerOutlet(null);
   }, [registerOutlet]);
 
-  // `empty:hidden` keeps the surrounding `space-y-*` gap from showing when
-  // there are no toasts.
-  return <div ref={ref} className={`empty:hidden space-y-3 ${className}`} />;
+  /*
+   * Two things this markup is doing, both deliberate.
+   *
+   * `h-0` on the anchor: toasts used to be ordinary children of the sidebar's
+   * vertical stack, so the moment one appeared it took real height and shoved
+   * Game Details and everything under it down the page — then let it spring back
+   * on dismiss. A zero-height anchor with absolutely positioned children means
+   * the sidebar's layout is identical whether or not a toast is showing.
+   *
+   * `sticky`: the confirmation for Quit Game is raised from a button near the
+   * bottom of the sidebar, but rendered at the top of it. On a short window you
+   * had to scroll back up to answer your own click. Pinning the anchor to the
+   * viewport keeps the prompt where you are looking.
+   *
+   * Below `z-50` so the game-over dialog still covers it.
+   */
+  return (
+    <div className={`sticky top-3 z-40 h-0 ${className}`}>
+      <div ref={ref} className="absolute inset-x-0 top-0 space-y-3" />
+    </div>
+  );
 };
 
 // Toast Provider Component
