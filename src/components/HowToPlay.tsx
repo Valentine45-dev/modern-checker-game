@@ -228,7 +228,7 @@ const HowToPlay: React.FC<HowToPlayProps> = ({ onBack }) => {
               </div>
               <div className="bg-indigo-500/10 rounded-lg p-4 border border-indigo-500/20">
                 <h3 className="text-lg font-semibold text-indigo-300 mb-2"><span className="inline-flex items-center gap-2"><Crown className="w-5 h-5" aria-hidden="true" />Kings</span></h3>
-                <p className="text-gray-200 text-xs">Get your pieces to the opposite end to promote them to kings</p>
+                <p className="text-gray-200 text-xs">Get your pieces to the opposite end to promote them to kings. Finish a capture sequence first — passing through the far rank mid-jump does not crown you.</p>
               </div>
             </div>
           </section>

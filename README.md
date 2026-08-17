@@ -47,10 +47,13 @@ An 8×8 board using international-style rules, closest to Brazilian draughts:
 - **Promotion** happens when a man finishes its move on the far rank.
 - A player loses when they have no pieces left, or no legal move.
 
-Two deliberate house rules, worth knowing if you are used to tournament play:
+- **Promotion is decided by where a capture sequence ends.** A man may pass through the far
+  rank part-way through a multi-capture; it keeps jumping as a man and is crowned only if
+  the *final* landing square of the whole sequence is on that rank. This matches the
+  international rules already used for backward captures and flying kings.
 
-- **Promotion ends the turn.** A man that lands on the far rank mid-sequence crowns and
-  stops, rather than continuing as a king.
+One deliberate house rule, worth knowing if you are used to tournament play:
+
 - **Maximum capture is not enforced.** Any legal capture may be taken, not only the one
   that captures the most pieces.
 
@@ -185,6 +188,10 @@ same change measured at a lower floor, where the relative jump in depth is large
 It costs the player nothing. AI replies still land in 942–964ms against 954–976ms before,
 because the search already ran on a worker alongside a 900ms pause and was leaving most of
 that budget unspent.
+
+These figures were measured before promotion timing changed. Both sides of every match
+played identical rules, so the comparisons hold, but the absolute numbers predate the
+current rule and have not been re-measured.
 
 It is still not unbeatable: there is no opening book and no endgame knowledge.
 

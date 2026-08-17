@@ -365,7 +365,7 @@ export interface ResolvedCapturePath {
   path: Position[];
   /** EVERY piece captured along that path, not just at the final hop. */
   captured: Piece[];
-  /** True when the sequence must stop here: no continuations, or a man promoted. */
+  /** True when the sequence must stop here, i.e. there are no further captures. */
   endsTurn: boolean;
 }
 
@@ -378,13 +378,13 @@ export interface ResolvedCapturePath {
  * pieces standing on an illegal board. Anything that resolves a destination must
  * go through here so it gets the cumulative captures.
  *
- * A man that lands on its promotion row ends its turn, so nothing beyond such a
- * landing is reachable — the same rule `enumerateMoves` applies, which keeps the
- * squares the UI offers identical to the ones the engine considers legal.
+ * Landing on the promotion row does NOT end the sequence. A man may cross its own
+ * promotion row mid-capture and carry on; whether it is crowned depends on where
+ * the whole path finishes, which only the caller knows once the sequence is over.
+ * See `collectCaptureSequences` for the engine's half of the same rule.
  */
 export function resolveCapturePath(
   captures: PossibleMove[],
-  piece: Piece,
   target: Position
 ): ResolvedCapturePath | null {
   const search = (
@@ -396,10 +396,7 @@ export function resolveCapturePath(
       const path = [...pathSoFar, node.position];
       const captured = [...capturedSoFar, ...node.capturedPieces];
 
-      const promotesHere =
-        piece.type !== 'king' && node.position.row === promotionRow(piece.color);
-      const canContinue =
-        !promotesHere && !!node.continuations && node.continuations.length > 0;
+      const canContinue = !!node.continuations && node.continuations.length > 0;
 
       if (positionsEqual(node.position, target)) {
         return { node, path, captured, endsTurn: !canContinue };
@@ -418,21 +415,17 @@ export function resolveCapturePath(
 
 /**
  * Every square a piece may legally finish a hop on, given a capture tree.
- * Intermediate landings stay selectable so a player can still take a sequence
- * one jump at a time; squares beyond a promotion are excluded because the turn
- * ends there.
+ * Intermediate landings stay selectable so a player can still take a sequence one
+ * jump at a time, including a landing on the promotion row: crossing that row
+ * mid-capture is a hop like any other, so the squares beyond it stay reachable.
  */
-export function captureDestinations(captures: PossibleMove[], piece: Piece): Position[] {
+export function captureDestinations(captures: PossibleMove[]): Position[] {
   const out: Position[] = [];
 
   const walk = (nodes: PossibleMove[]) => {
     for (const node of nodes) {
       out.push(node.position);
-
-      const promotesHere =
-        piece.type !== 'king' && node.position.row === promotionRow(piece.color);
-
-      if (!promotesHere && node.continuations && node.continuations.length > 0) {
+      if (node.continuations && node.continuations.length > 0) {
         walk(node.continuations);
       }
     }
@@ -487,10 +480,14 @@ export interface FullMove {
 /**
  * Walk a capture tree to its terminal leaves.
  *
- * A sequence stops early when a man lands on its promotion row, because that is
- * what the board does (Game.tsx ends the turn on promotion rather than letting a
- * fresh king keep jumping). The search has to model the same game the board
- * plays.
+ * A sequence runs to the end of the tree, even if it crosses the mover's own
+ * promotion row on the way. `promotes` is therefore evaluated at the leaf — the
+ * square the whole turn finishes on — which is the only place the question has an
+ * answer. Stopping at the first promotion-row landing instead would both hide
+ * longer captures from the search and crown a piece mid-turn.
+ *
+ * `piece` stays the piece as it was before the move, so `piece.type` is its rank
+ * at the start of the turn: a man that crosses the row is still a man here.
  */
 function collectCaptureSequences(
   node: PossibleMove,
@@ -502,8 +499,7 @@ function collectCaptureSequences(
   const path = [...pathSoFar, node.position];
   const captured = [...capturedSoFar, ...node.capturedPieces];
 
-  const promotesHere = piece.type !== 'king' && node.position.row === promotionRow(piece.color);
-  const canContinue = !promotesHere && node.continuations && node.continuations.length > 0;
+  const canContinue = node.continuations && node.continuations.length > 0;
 
   if (canContinue) {
     for (const child of node.continuations!) {
@@ -519,7 +515,8 @@ function collectCaptureSequences(
     path,
     captured,
     isCapture: true,
-    promotes: promotesHere,
+    // The leaf, so this is the square the turn actually ends on.
+    promotes: piece.type !== 'king' && node.position.row === promotionRow(piece.color),
   });
 }
 

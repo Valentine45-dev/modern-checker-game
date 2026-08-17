@@ -43,6 +43,14 @@ export interface Move {
   capturedPieces?: Piece[];
   becameKing?: boolean;
   timestamp?: number;
+  /**
+   * Which side played this move.
+   *
+   * Optional because saved games written before this field existed have moves
+   * without it. Those entries simply render without a colour marker rather than
+   * invalidating the whole save.
+   */
+  color?: PlayerColor;
 }
 
 /**

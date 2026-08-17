@@ -287,7 +287,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     if (multiJumpInProgress) {
       if (currentJumpPiece && piece.id === currentJumpPiece.id) {
         const { moves, captures } = getValidMovesForPiece(piece);
-        const validPositions = captures.length > 0 ? captureDestinations(captures, piece) : moves;
+        const validPositions = captures.length > 0 ? captureDestinations(captures) : moves;
         
         setGameState(prev => ({
           ...prev,
@@ -352,7 +352,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       return;
     }
     
-    const validPositions = captures.length > 0 ? captureDestinations(captures, piece) : moves;
+    const validPositions = captures.length > 0 ? captureDestinations(captures) : moves;
     
     if (mustCapture && captures.length > 0) {
       addToast({
@@ -588,7 +588,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
   // Execute move or capture
   function executeMoveOrCapture(piece: Piece, newPosition: Position) {
-    const resolved = resolveCapturePath(gameState.possibleCaptures, piece, newPosition);
+    const resolved = resolveCapturePath(gameState.possibleCaptures, newPosition);
 
     if (resolved) {
       executeCapture(piece, newPosition, resolved);
@@ -625,10 +625,17 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       newBoard[captured.position.row][captured.position.col] = null;
     }
 
-    // Check for king promotion
-    const reachedBackRank =
-      newRow === promotionRow(piece.color);
-    const becameKing = reachedBackRank && piece.type !== 'king';
+    // Whether the whole sequence is over has to be settled BEFORE promotion,
+    // because promotion is a property of the finished path, not of this hop.
+    const continuations = resolved.node.continuations;
+    const sequenceEnds = resolved.endsTurn || !continuations || continuations.length === 0;
+
+    // A man may cross its own promotion row mid-sequence. Crowning it there would
+    // do two wrong things: end the turn while captures are still available, and
+    // hand the piece flying-king movement for the remaining hops, changing the
+    // capture tree part-way through a move.
+    const becameKing =
+      sequenceEnds && piece.type !== 'king' && newRow === promotionRow(piece.color);
 
     // Move the piece (promoting it in the same step, so the object is never mutated)
     const movedPiece: Piece = {
@@ -657,10 +664,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     newBoard[oldRow][oldCol] = null;
     newBoard[newRow][newCol] = movedPiece;
 
-    // More jumps available from where the piece landed? `endsTurn` already
-    // accounts for promotion, so a man that just crowned stops here.
-    const continuations = resolved.node.continuations;
-    if (!resolved.endsTurn && continuations && continuations.length > 0 && !becameKing) {
+    if (!sequenceEnds) {
       // Multi-jump in progress - DON'T update score yet, just accumulate
       setMultiJumpInProgress(true);
       setCurrentJumpPiece(movedPiece);
@@ -671,7 +675,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
         ...prev,
         board: newBoard,
         selectedPiece: movedPiece,
-        validMoves: captureDestinations(continuations, movedPiece),
+        validMoves: captureDestinations(continuations),
         possibleCaptures: continuations,
         score: prev.score // Don't update score during multi-jump
       }));
@@ -781,6 +785,9 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
       to,
       capturedPieces,
       becameKing,
+      // Recorded so the history can show who moved. `currentPlayer` is still the
+      // mover at this point; the handover happens just below.
+      color: gameState.currentPlayer,
       timestamp: Date.now()
     };
     
@@ -1164,7 +1171,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
           // evaluation at all, so the AI could pick a 1-piece branch when a
           // 3-piece one was available.
           const planned = nextHop
-            ? resolveCapturePath(captures, currentJumpPiece, nextHop)
+            ? resolveCapturePath(captures, nextHop)
             : null;
 
           if (planned) {
@@ -1206,7 +1213,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
 
         if (aiMove.move.isCapture) {
           const { captures } = getValidMovesForPiece(piece);
-          const resolved = resolveCapturePath(captures, piece, firstHop);
+          const resolved = resolveCapturePath(captures, firstHop);
           if (resolved) {
             executeCapture(piece, resolved.node.position, resolved);
           } else {

@@ -24,7 +24,7 @@ function clickDestination(
   captures: ReturnType<typeof getPossibleCaptures>,
   target: Position
 ): { board: BoardType; movedPiece: Piece; captured: number; turnContinues: boolean } {
-  const resolved = resolveCapturePath(captures, piece, target);
+  const resolved = resolveCapturePath(captures, target);
   if (!resolved) throw new Error(`no capture path to ${target.row},${target.col}`);
 
   const next = board.map(row => [...row]);
@@ -32,14 +32,17 @@ function clickDestination(
     next[captured.position.row][captured.position.col] = null;
   }
 
-  const promotes = piece.type !== 'king' && target.row === promotionRow(piece.color);
+  // Same order as executeCapture: settle whether the sequence is over first,
+  // because promotion belongs to the finished path, not to this hop.
+  const continuations = resolved.node.continuations;
+  const turnContinues = !resolved.endsTurn && !!continuations && continuations.length > 0;
+  const promotes =
+    !turnContinues && piece.type !== 'king' && target.row === promotionRow(piece.color);
+
   const movedPiece: Piece = { ...piece, position: target, type: promotes ? 'king' : piece.type };
 
   next[piece.position.row][piece.position.col] = null;
   next[target.row][target.col] = movedPiece;
-
-  const continuations = resolved.node.continuations;
-  const turnContinues = !resolved.endsTurn && !!continuations && continuations.length > 0 && !promotes;
 
   return { board: next, movedPiece, captured: resolved.captured.length, turnContinues };
 }
@@ -76,7 +79,7 @@ describe('resolveCapturePath', () => {
       . . . . . . . b
     `);
     const piece = board[1][1]!;
-    const resolved = resolveCapturePath(capturesFor(board, piece), piece, { row: 3, col: 3 })!;
+    const resolved = resolveCapturePath(capturesFor(board, piece), { row: 3, col: 3 })!;
 
     expect(resolved.captured).toHaveLength(1);
     expect(resolved.path).toEqual([{ row: 3, col: 3 }]);
@@ -90,9 +93,9 @@ describe('resolveCapturePath', () => {
     const piece = board[1][1]!;
     const captures = capturesFor(board, piece);
 
-    const first = resolveCapturePath(captures, piece, { row: 3, col: 3 })!;
-    const second = resolveCapturePath(captures, piece, { row: 5, col: 5 })!;
-    const third = resolveCapturePath(captures, piece, { row: 7, col: 7 })!;
+    const first = resolveCapturePath(captures, { row: 3, col: 3 })!;
+    const second = resolveCapturePath(captures, { row: 5, col: 5 })!;
+    const third = resolveCapturePath(captures, { row: 7, col: 7 })!;
 
     expect(first.captured).toHaveLength(1);
     expect(second.captured).toHaveLength(2);
@@ -105,7 +108,7 @@ describe('resolveCapturePath', () => {
   it('returns null for a square that is not in the tree', () => {
     const board = tripleChainBoard();
     const piece = board[1][1]!;
-    expect(resolveCapturePath(capturesFor(board, piece), piece, { row: 4, col: 0 })).toBeNull();
+    expect(resolveCapturePath(capturesFor(board, piece), { row: 4, col: 0 })).toBeNull();
   });
 });
 
@@ -249,7 +252,7 @@ describe('illegal shortcuts are rejected', () => {
   it('offers only squares that exist in the capture tree', () => {
     const board = tripleChainBoard();
     const piece = board[1][1]!;
-    const offered = captureDestinations(capturesFor(board, piece), piece)
+    const offered = captureDestinations(capturesFor(board, piece))
       .map(p => `${p.row},${p.col}`);
 
     expect(offered).toEqual(expect.arrayContaining(['3,3', '5,5', '7,7']));
@@ -261,15 +264,16 @@ describe('illegal shortcuts are rejected', () => {
     const board = tripleChainBoard();
     const piece = board[1][1]!;
     for (const bad of [{ row: 0, col: 0 }, { row: 4, col: 4 }, { row: 6, col: 0 }]) {
-      expect(resolveCapturePath(capturesFor(board, piece), piece, bad)).toBeNull();
+      expect(resolveCapturePath(capturesFor(board, piece), bad)).toBeNull();
     }
   });
 });
 
-describe('promotion stops the chain', () => {
-  it('does not offer squares beyond the square where a man crowns', () => {
-    // Red man jumps onto row 7 and crowns; the turn ends there even if the
-    // geometry would allow another jump.
+describe('reaching the promotion row does not end the sequence', () => {
+  it('ends the turn on the promotion row only when no capture remains', () => {
+    // Red jumps (6,2) onto row 7. Nothing is left to jump from there, so the
+    // turn genuinely ends — but because the tree is empty, not because the
+    // landing square happens to be the crowning row.
     const board = boardFrom(`
       . . . . . . . .
       . . . . . . . .
@@ -281,14 +285,40 @@ describe('promotion stops the chain', () => {
       . . . . . . . .
     `);
     const piece = board[5][1]!;
-    const offered = captureDestinations(capturesFor(board, piece), piece);
+    const offered = captureDestinations(capturesFor(board, piece));
 
     expect(offered.some(p => p.row === 7)).toBe(true);
-    // nothing past the promotion square
     for (const dest of offered) {
-      const resolved = resolveCapturePath(capturesFor(board, piece), piece, dest)!;
-      if (dest.row === 7) expect(resolved.endsTurn).toBe(true);
+      const resolved = resolveCapturePath(capturesFor(board, piece), dest)!;
+      if (dest.row === 7) {
+        expect(resolved.node.continuations ?? []).toHaveLength(0);
+        expect(resolved.endsTurn).toBe(true);
+      }
     }
+  });
+
+  it('keeps the turn alive when a capture remains from the promotion row', () => {
+    // Same idea, but now a second victim sits where the crowned square can
+    // still jump it. The sequence must continue and the piece stay a man.
+    const board = boardFrom(`
+      . . . . . . . .
+      . . . . . . . .
+      . . . . . . . .
+      . . . . . . . .
+      . . . . . . . .
+      r . . . . . . .
+      . b . b . . . .
+      . . . . . . . .
+    `);
+    const piece = board[5][0]!;
+    const onRow7 = { row: 7, col: 2 };
+
+    const resolved = resolveCapturePath(capturesFor(board, piece), onRow7)!;
+    expect(resolved.endsTurn).toBe(false);
+
+    const step = clickDestination(board, piece, capturesFor(board, piece), onRow7);
+    expect(step.turnContinues).toBe(true);
+    expect(step.movedPiece.type).toBe('normal');
   });
 
   it('agrees with enumerateMoves about what is legal', () => {
@@ -304,9 +334,9 @@ describe('promotion stops the chain', () => {
         .map(m => `${m.to.row},${m.to.col}`)
     );
 
-    const offered = captureDestinations(capturesFor(board, piece), piece);
+    const offered = captureDestinations(capturesFor(board, piece));
     const terminal = offered.filter(dest => {
-      const resolved = resolveCapturePath(capturesFor(board, piece), piece, dest)!;
+      const resolved = resolveCapturePath(capturesFor(board, piece), dest)!;
       return resolved.endsTurn;
     });
 

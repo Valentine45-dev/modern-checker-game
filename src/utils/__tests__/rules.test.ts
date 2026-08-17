@@ -146,9 +146,10 @@ describe('promotion', () => {
     expect(after[move.to.row][move.to.col]!.type).toBe('king');
   });
 
-  it('ends the capture sequence when a man promotes mid-chain', () => {
-    // The board stops the turn on promotion, so enumerateMoves must agree —
-    // otherwise the AI would search a different game than the one being played.
+  it('marks a move as promoting only when it FINISHES on the promotion row', () => {
+    // `promotes` describes the whole turn, so it may only be true when the last
+    // square of the path is the crowning row. Crossing that row mid-sequence
+    // does not count — see promotionTiming.test.ts for the full rule.
     const board = boardFrom(`
       b . . . . . . .
       . . . . . . . .
@@ -160,11 +161,14 @@ describe('promotion', () => {
       . . . . . . . .
     `);
 
-    const promoting = enumerateMoves(board, 'red').filter(m => m.promotes);
+    const moves = enumerateMoves(board, 'red');
+    const promoting = moves.filter(m => m.promotes);
     expect(promoting.length).toBeGreaterThan(0);
-    for (const move of promoting) {
-      expect(move.to.row).toBe(promotionRow('red'));
-      expect(move.path[move.path.length - 1].row).toBe(7);
+
+    for (const move of moves) {
+      const endsOnRow = move.path[move.path.length - 1].row === promotionRow('red');
+      expect(move.promotes).toBe(endsOnRow);
+      expect(move.to.row === promotionRow('red')).toBe(endsOnRow);
     }
   });
 
