@@ -726,33 +726,33 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
     const { row: oldRow, col: oldCol } = piece.position;
     const { row: newRow, col: newCol } = newPosition;
     
-    // Move the piece
+    // A plain move is its own whole turn, so the landing square settles
+    // promotion outright — there is no sequence to wait for.
+    const becameKing = piece.type !== 'king' && newRow === promotionRow(piece.color);
+
+    // Built in one step rather than spread and then mutated, so the object is
+    // never observed half-updated.
     const movedPiece: Piece = {
       ...piece,
-      position: newPosition
+      position: newPosition,
+      type: becameKing ? 'king' : piece.type
     };
-    
-    // Check for king promotion
-    let becameKing = false;
-    if (newRow === promotionRow(movedPiece.color)) {
-      if (movedPiece.type !== 'king') {
-        movedPiece.type = 'king';
-        becameKing = true;
-        setKingsPromoted(prev => ({
-          ...prev,
-          [movedPiece.color]: prev[movedPiece.color] + 1
-        }));
-        
-        addToast({
-          type: 'success',
-          message: 'King Promoted!',
-          description: 'Your piece reached the opposite end and became a King!',
-          duration: 4000,
-        });
-        
-        // Play king promotion sound
-        playSound(() => soundManager.playKingPromotionSound());
-      }
+
+    if (becameKing) {
+      setKingsPromoted(prev => ({
+        ...prev,
+        [movedPiece.color]: prev[movedPiece.color] + 1
+      }));
+
+      addToast({
+        type: 'success',
+        message: 'King Promoted!',
+        description: 'Your piece reached the opposite end and became a King!',
+        duration: 4000,
+      });
+
+      // Play king promotion sound
+      playSound(() => soundManager.playKingPromotionSound());
     }
     
       newBoard[oldRow][oldCol] = null;
