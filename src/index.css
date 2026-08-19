@@ -193,27 +193,15 @@
     animation: game-over-trophy-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
   }
 
-  /* Reduce motion means less movement, not no feedback at all.
-     Cutting the animation to `none` made the modal appear instantly, which reads
-     as a glitch rather than as a considerate default. Everyone still gets a
-     cross-fade; what goes away is the travel, the scaling and the overshoot. */
-  @keyframes game-over-fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
+  /* The game-over animation deliberately does NOT branch on
+     prefers-reduced-motion.
 
-  @media (prefers-reduced-motion: reduce) {
-    .animate-game-over-backdrop,
-    .animate-game-over-card,
-    .animate-game-over-trophy,
-    .animate-game-over-rise,
-    .animate-game-over-crown {
-      animation: game-over-fade-in 0.35s ease-out both;
-    }
-
-    .animate-game-over-card {
-      animation-delay: 0.1s;
-    }
-  }
+     That OS preference normally suppresses movement, and honouring it is the
+     default worth keeping — motion can genuinely make some people unwell. Here it
+     is overridden by explicit request, on the basis that the app carries its own
+     Animations switch in Settings. The escape hatch still exists; it just lives
+     in the game rather than in the operating system. Anyone who needs the modal
+     to stop moving can turn it off there, and that toggle removes these classes
+     entirely rather than merely softening them. */
 }
 
