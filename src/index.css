@@ -119,10 +119,13 @@
   @keyframes game-over-card-in {
     from {
       opacity: 0;
-      transform: translateY(24px) scale(0.94);
+      transform: translateY(28px) scale(0.9);
     }
-    60% {
-      transform: translateY(-4px) scale(1.01);
+    55% {
+      transform: translateY(-6px) scale(1.02);
+    }
+    75% {
+      transform: translateY(2px) scale(0.995);
     }
     to {
       opacity: 1;
@@ -131,7 +134,44 @@
   }
 
   .animate-game-over-card {
-    animation: game-over-card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+    animation: game-over-card-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+  }
+
+  /* The result line and each statistic arrive just behind the card, so the eye
+     is led down the panel instead of meeting all of it at once. */
+  @keyframes game-over-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-game-over-rise {
+    animation: game-over-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* A win is worth a beat of celebration; a loss gets the same timing without
+     the flourish, which is handled by not applying this class. */
+  @keyframes game-over-crown-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.5) translateY(6px);
+    }
+    60% {
+      transform: scale(1.25) translateY(-2px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-game-over-crown {
+    animation: game-over-crown-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
 
   /* The trophy lands last, after the card has settled. */
@@ -153,13 +193,26 @@
     animation: game-over-trophy-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
   }
 
-  /* Anyone who has asked the OS to reduce motion gets the modal without the
-     movement, but still gets the delay before it appears. */
+  /* Reduce motion means less movement, not no feedback at all.
+     Cutting the animation to `none` made the modal appear instantly, which reads
+     as a glitch rather than as a considerate default. Everyone still gets a
+     cross-fade; what goes away is the travel, the scaling and the overshoot. */
+  @keyframes game-over-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-game-over-backdrop,
     .animate-game-over-card,
-    .animate-game-over-trophy {
-      animation: none;
+    .animate-game-over-trophy,
+    .animate-game-over-rise,
+    .animate-game-over-crown {
+      animation: game-over-fade-in 0.35s ease-out both;
+    }
+
+    .animate-game-over-card {
+      animation-delay: 0.1s;
     }
   }
 }

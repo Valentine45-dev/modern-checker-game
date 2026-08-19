@@ -869,6 +869,39 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   }, [gameState.board, gameState.currentPlayer, gameState.gameStatus, multiJumpInProgress]);
 
   /**
+   * Release the turn if the AI is marked as thinking when it is not its move.
+   *
+   * The guard that stops two searches running at once is also what refuses
+   * clicks while the AI thinks, so anything that strands it makes the board
+   * permanently unresponsive on the player's own turn — the worst failure this
+   * app has. The known cause (a worker reply that never arrived) is fixed at
+   * source in aiClient, but the symptom is severe enough to be worth a net that
+   * does not depend on knowing every cause.
+   *
+   * Deliberately conditioned on whose turn it is rather than on a timer: if the
+   * AI is not to move, nothing legitimate can be holding the turn, whatever the
+   * reason.
+   */
+  useEffect(() => {
+    if (!aiThinking) return;
+
+    const isAITurn = isAIGame && gameState.currentPlayer === aiColor;
+    const isAIChain = multiJumpInProgress && currentJumpPiece?.color === aiColor;
+    if (isAITurn || isAIChain) return;
+
+    console.warn("AI still marked as thinking on the other side's turn; releasing it");
+    aiSearchRef.current = false;
+    setAiThinking(false);
+  }, [
+    aiThinking,
+    gameState.currentPlayer,
+    multiJumpInProgress,
+    currentJumpPiece,
+    isAIGame,
+    aiColor,
+  ]);
+
+  /**
    * Fold a finished game into the lifetime statistics.
    *
    * Placed here rather than in the individual ending paths because there are
@@ -1312,6 +1345,16 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
   }
 
   /**
+   * Animation class for one piece of the game-over panel, delayed so the panel
+   * assembles top to bottom instead of arriving all at once. Returns nothing
+   * when animations are off, so the setting still wins.
+   */
+  const revealAt = (variant: 'rise' | 'crown' = 'rise') =>
+    gameSettings.animationsEnabled ? `animate-game-over-${variant}` : '';
+  const revealDelay = (seconds: number) =>
+    gameSettings.animationsEnabled ? { animationDelay: `${seconds}s` } : undefined;
+
+  /**
    * The line under the result.
    *
    * This used to be the fixed string "Congratulations, you have successfully
@@ -1512,15 +1555,25 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
                   <Trophy className="w-10 h-10 text-white" aria-hidden="true" />
                 </div>
               </div>
-              <h2 id="game-over-title" className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+              <h2
+                id="game-over-title"
+                className={`text-3xl font-bold text-gray-900 dark:text-white mb-1 ${revealAt()}`}
+                style={revealDelay(0.28)}
+              >
                 {gameState.winner === 'red' 
                   ? (isAIGame ? 'AI' : 'Red') 
                   : 'Black'} Wins!
               </h2>
-              <p className="text-base text-gray-600 dark:text-gray-400 mb-1">
+              <p
+                className={`text-base text-gray-600 dark:text-gray-400 mb-1 ${revealAt()}`}
+                style={revealDelay(0.36)}
+              >
                 {getVictoryMessage()}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500">
+              <p
+                className={`text-xs text-gray-500 dark:text-gray-500 ${revealAt()}`}
+                style={revealDelay(0.44)}
+              >
                 {getOutcomeMessage()}
               </p>
             </div>
@@ -1528,7 +1581,10 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
             {/* Game Statistics */}
             <div className="p-4 space-y-3">
               {/* Performance Rating */}
-              <div className="text-center p-2 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
+              <div
+                className={`text-center p-2 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20 ${revealAt()}`}
+                style={revealDelay(0.5)}
+              >
                 {/* In PvP the rating needs a name against it, or it reads as a
                     verdict on whoever happens to be looking at the screen. */}
                 {!isAIGame && (
@@ -1559,7 +1615,7 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
               {/* Pieces Captured — "captured by", matching the in-game card.
                   The number beside the red disc is what red took, not what red
                   lost, and the bare label "Red" read as the latter. */}
-              <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20">
+              <div className={`bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20 ${revealAt()}`} style={revealDelay(0.62)}>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Pieces captured by</p>
                 <div className="flex justify-around">
                   <div className="flex items-center gap-2">
@@ -1587,16 +1643,16 @@ const Game = ({ onBackToMenu, onBackToMenuAfterQuit, onGameQuit, gameMode }: Gam
               </div>
 
               {/* Kings Promoted */}
-              <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20">
+              <div className={`bg-primary/5 dark:bg-primary/10 p-3 rounded-lg border border-primary/20 ${revealAt()}`} style={revealDelay(0.68)}>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Kings Promoted</p>
                 <div className="flex justify-around">
                   <div className="text-center">
-                    <p className="flex justify-center text-yellow-500"><Crown className="w-6 h-6" aria-hidden="true" /></p>
+                    <p className={`flex justify-center text-yellow-500 ${revealAt('crown')}`} style={revealDelay(0.78)}><Crown className="w-6 h-6" aria-hidden="true" /></p>
                     <p className="text-base font-bold text-gray-900 dark:text-white">{kingsPromoted.red}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Red</p>
                   </div>
                   <div className="text-center">
-                    <p className="flex justify-center text-yellow-500"><Crown className="w-6 h-6" aria-hidden="true" /></p>
+                    <p className={`flex justify-center text-yellow-500 ${revealAt('crown')}`} style={revealDelay(0.78)}><Crown className="w-6 h-6" aria-hidden="true" /></p>
                     <p className="text-base font-bold text-gray-900 dark:text-white">{kingsPromoted.black}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Black</p>
                   </div>
